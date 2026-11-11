@@ -1,0 +1,22 @@
+# R8 / ProGuard rules for StealthNotificationMonitor
+-keep class com.notrack.stealth.StealthService { *; }
+-keep class com.notrack.stealth.BootReceiver { *; }
+-keep class com.notrack.stealth.MainActivity { *; }
+-keep class com.notrack.stealth.security.** { *; }
+-keep class com.notrack.stealth.db.** { *; }
+-keep class com.notrack.stealth.sync.** { *; }
+
+# Keep SQLCipher
+-keep class net.sqlcipher.** { *; }
+-keep class net.sqlcipher.database.** { *; }
+
+# Keep Room generated implementations
+-keep class * extends androidx.room.RoomDatabase
+-dontwarn androidx.room.paging.**
+
+# Keep WorkManager Worker
+-keep class * extends androidx.work.Worker
+
+-keepclassmembers class * extends android.service.notification.NotificationListenerService {
+    public *;
+}

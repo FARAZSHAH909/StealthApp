@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "500000000000",
+    "firebase_url": "https://stealthapp-50da2-default-rtdb.firebaseio.com",
+    "project_id": "stealthapp-50da2",
+    "storage_bucket": "stealthapp-50da2.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:500000000000:android:abcdef1234567890",
+        "android_client_info": {
+          "package_name": "com.notrack.stealth"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDummyKeyForStealthApp123456789"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
