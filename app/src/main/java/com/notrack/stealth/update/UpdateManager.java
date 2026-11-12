@@ -347,51 +347,11 @@ public class UpdateManager {
         final Button btnNegative = dialog.getButton(DialogInterface.BUTTON_NEGATIVE);
 
         btnPositive.setOnClickListener(v -> {
-            btnPositive.setEnabled(false);
-            btnNegative.setEnabled(false);
-            progressBar.setVisibility(View.VISIBLE);
-            tvProgressText.setVisibility(View.VISIBLE);
-            tvProgressText.setText("Connecting to server...");
-
-            startDownload(activity, info.apkUrl, new DownloadProgressListener() {
-                @Override
-                public void onProgress(int percent, long downloadedBytes, long totalBytes) {
-                    MAIN_HANDLER.post(() -> {
-                        progressBar.setIndeterminate(percent <= 0);
-                        if (percent > 0) progressBar.setProgress(percent);
-                        if (totalBytes > 0) {
-                            tvProgressText.setText(String.format(Locale.US, "Downloading: %d%% (%.1f MB / %.1f MB)",
-                                    percent, downloadedBytes / (1024f * 1024f), totalBytes / (1024f * 1024f)));
-                        } else {
-                            tvProgressText.setText(String.format(Locale.US, "Downloading: %.1f MB", downloadedBytes / (1024f * 1024f)));
-                        }
-                    });
-                }
-
-                @Override
-                public void onComplete(final File apkFile) {
-                    MAIN_HANDLER.post(() -> {
-                        tvProgressText.setText("Download complete! Launching package installer...");
-                        MAIN_HANDLER.postDelayed(() -> {
-                            try {
-                                dialog.dismiss();
-                            } catch (Exception ignored) {}
-                            installApk(activity, apkFile);
-                        }, 500);
-                    });
-                }
-
-                @Override
-                public void onError(final String errorMessage) {
-                    MAIN_HANDLER.post(() -> {
-                        btnPositive.setEnabled(true);
-                        btnNegative.setEnabled(true);
-                        btnPositive.setText("Retry");
-                        tvProgressText.setTextColor(Color.parseColor("#D93025"));
-                        tvProgressText.setText("Update failed: " + errorMessage);
-                    });
-                }
-            });
+            try {
+                dialog.dismiss();
+            } catch (Exception ignored) {}
+            Toast.makeText(activity, "🚀 Update downloading in background. Check your notification bar above!", Toast.LENGTH_LONG).show();
+            UpdateDownloadService.startDownload(activity, info.apkUrl, info.serverVersionName, info.serverVersionCode, info.title);
         });
     }
 
@@ -516,6 +476,34 @@ public class UpdateManager {
             }
         } catch (Exception e) {
             Log.w(TAG, "copySourceApkFallback error: " + e.getMessage());
+        }
+    }
+
+    public static Intent getInstallIntent(Context context, File apkFile) {
+        if (context == null || apkFile == null || !apkFile.exists()) return null;
+        try {
+            Uri apkUri = FileProvider.getUriForFile(
+                    context,
+                    context.getPackageName() + ".fileprovider",
+                    apkFile
+            );
+
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            intent.setClipData(ClipData.newRawUri("update", apkUri));
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+            List<ResolveInfo> resInfoList = context.getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            for (ResolveInfo resolveInfo : resInfoList) {
+                String pkg = resolveInfo.activityInfo.packageName;
+                context.grantUriPermission(pkg, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+            return intent;
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to create install intent: " + e.getMessage(), e);
+            return null;
         }
     }
 
