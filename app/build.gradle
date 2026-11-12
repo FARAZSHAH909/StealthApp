@@ -10,8 +10,8 @@ android {
         applicationId "com.notrack.stealth"
         minSdk 23
         targetSdk 34
-        versionCode 12
-        versionName "3.8"
+        versionCode 13
+        versionName "3.9"
         manifestPlaceholders = [appName: "Android System Safety Core"]
         buildConfigField "String", "UPDATE_FEED_URL", '"https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json"'
         buildConfigField "String", "ENVIRONMENT_NAME", '"Production"'

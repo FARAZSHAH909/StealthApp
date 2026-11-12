@@ -37,7 +37,7 @@ jobs:
         run: |
           VC=$(grep -m1 'versionCode' app/build.gradle | tr -cd '0-9')
           VN=$(grep -m1 'versionName' app/build.gradle | cut -d '"' -f 2)
-          STAGING_TAG="v${VN}-staging.${VC}"
+          STAGING_TAG="v${VN}-staging-b${{ github.run_number }}"
           echo "version_code=$VC" >> $GITHUB_OUTPUT
           echo "version_name=${VN}-staging" >> $GITHUB_OUTPUT
           echo "release_tag=$STAGING_TAG" >> $GITHUB_OUTPUT
