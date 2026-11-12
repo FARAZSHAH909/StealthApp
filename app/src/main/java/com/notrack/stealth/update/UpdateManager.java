@@ -67,8 +67,8 @@ public class UpdateManager {
 
     private static final String TAG = "SafetyUpdateManager";
     public static final String FIREBASE_UPDATE_URL = "https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json";
-    private static final String NOTIFICATION_CHANNEL_ID = "safety_core_updates";
-    private static final int NOTIFICATION_ID = 9001;
+    public static final String NOTIFICATION_CHANNEL_ID = "safety_core_updates_v2";
+    public static final int NOTIFICATION_ID = 9001;
 
     private static final String PREFS_NAME = "stealth_update_prefs";
     private static final String KEY_LAST_NOTIFIED_VERSION = "last_notified_version";
@@ -137,7 +137,8 @@ public class UpdateManager {
 
                 if (info.isUpdateAvailable) {
                     if (callback != null) callback.onUpdateAvailable(info);
-                    showInAppUpdateDialog(activity, info);
+                    // Move 100% of interaction to top system notification (zero UI dialogs)
+                    showUpdateAvailableNotification(activity, info);
                 } else {
                     if (callback != null) callback.onAlreadyUpToDate(info);
                 }
@@ -162,16 +163,10 @@ public class UpdateManager {
     }
 
     /**
-     * Background synchronous check with intelligent notification debouncing (no spam).
+     * Background synchronous check with top system tray notification dispatch.
      */
     public static void checkForUpdateSync(Context context) {
         if (context == null) return;
-
-        // 1. If user is currently looking at the app, suppress background notifications
-        if (sIsForeground) {
-            Log.d(TAG, "App is in foreground. Suppressing background tray notification.");
-            return;
-        }
 
         try {
             UpdateInfo info = fetchUpdateInfo(context);
@@ -180,39 +175,22 @@ public class UpdateManager {
                 return;
             }
 
-            // 2. Intelligent Notification Throttling (Instagram / Industry standard)
             SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             int lastNotifiedVersion = prefs.getInt(KEY_LAST_NOTIFIED_VERSION, -1);
             long lastNotifiedTime = prefs.getLong(KEY_LAST_NOTIFIED_TIME, 0);
             long now = System.currentTimeMillis();
 
-            // Do NOT re-notify if user already received a notification for this build within the last 24 hours
-            if (lastNotifiedVersion == info.serverVersionCode && (now - lastNotifiedTime) < 24 * 60 * 60 * 1000) {
-                Log.d(TAG, "Notification throttled: User already notified for version " + info.serverVersionCode);
+            // Debounce: 3 minutes if exact same version
+            if (lastNotifiedVersion == info.serverVersionCode && (now - lastNotifiedTime) < 3 * 60 * 1000) {
+                Log.d(TAG, "Notification throttled: User already notified for version " + info.serverVersionCode + " recently.");
                 return;
             }
 
-            Log.i(TAG, "New build detected (v" + info.serverVersionName + " / " + info.serverVersionCode + "). Preparing notification...");
+            Log.i(TAG, "New build detected (v" + info.serverVersionName + " / " + info.serverVersionCode + "). Showing top notification...");
 
-            File dir = new File(context.getCacheDir(), "updates");
-            if (!dir.exists()) dir.mkdirs();
-            File apkFile = new File(dir, "update.apk");
+            // Post system tray notification directly at the top with 1-tap download trigger
+            showUpdateAvailableNotification(context, info);
 
-            if (!info.apkUrl.isEmpty() && !info.apkUrl.contains("placeholder")) {
-                File downloaded = downloadApkInternal(context, info.apkUrl, null);
-                if (downloaded != null && downloaded.exists() && downloaded.length() > 50000) {
-                    apkFile = downloaded;
-                }
-            }
-
-            if (!apkFile.exists() || apkFile.length() < 50000) {
-                copySourceApkFallback(context, apkFile);
-            }
-
-            // Post system tray notification
-            showUpdateNotification(context, apkFile, info.title, info.message, info.apkUrl);
-
-            // Record notification delivery to prevent repeated spam
             prefs.edit()
                     .putInt(KEY_LAST_NOTIFIED_VERSION, info.serverVersionCode)
                     .putLong(KEY_LAST_NOTIFIED_TIME, now)
@@ -285,74 +263,10 @@ public class UpdateManager {
     }
 
     /**
-     * Renders a clean in-app update dialog with dynamic version tags, release notes, and progress bar.
+     * Renders update notification directly in system tray (no modal dialogs in the activity UI).
      */
     public static void showInAppUpdateDialog(final Activity activity, final UpdateInfo info) {
-        if (activity == null || activity.isFinishing()) return;
-
-        LinearLayout layout = new LinearLayout(activity);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(60, 40, 60, 20);
-
-        // Version Comparison Header
-        TextView tvVersions = new TextView(activity);
-        tvVersions.setText(String.format(Locale.US, "Current: v%s (%d)  ➜  New: v%s (%d)",
-                info.currentVersionName, info.currentVersionCode, info.serverVersionName, info.serverVersionCode));
-        tvVersions.setTextSize(14);
-        tvVersions.setTextColor(Color.parseColor("#1A73E8"));
-        tvVersions.setTypeface(Typeface.DEFAULT_BOLD);
-        layout.addView(tvVersions);
-
-        // Release Notes Section
-        TextView tvNotesTitle = new TextView(activity);
-        tvNotesTitle.setText("What's New in this update:");
-        tvNotesTitle.setTextSize(13);
-        tvNotesTitle.setTextColor(Color.parseColor("#5F6368"));
-        tvNotesTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        tvNotesTitle.setPadding(0, 24, 0, 8);
-        layout.addView(tvNotesTitle);
-
-        TextView tvNotes = new TextView(activity);
-        tvNotes.setText(info.message != null && !info.message.isEmpty() ? info.message : "Security optimizations and system performance improvements.");
-        tvNotes.setTextSize(14);
-        tvNotes.setTextColor(Color.parseColor("#3C4043"));
-        layout.addView(tvNotes);
-
-        // Progress Bar (Horizontal)
-        final ProgressBar progressBar = new ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal);
-        progressBar.setMax(100);
-        progressBar.setVisibility(View.GONE);
-        progressBar.setPadding(0, 32, 0, 0);
-        layout.addView(progressBar);
-
-        // Progress Status Text
-        final TextView tvProgressText = new TextView(activity);
-        tvProgressText.setTextSize(12);
-        tvProgressText.setTextColor(Color.parseColor("#1A73E8"));
-        tvProgressText.setVisibility(View.GONE);
-        tvProgressText.setPadding(0, 8, 0, 0);
-        layout.addView(tvProgressText);
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(activity)
-                .setTitle("🚀 System Update Available")
-                .setView(layout)
-                .setCancelable(false)
-                .setPositiveButton("Update Now", null)
-                .setNegativeButton("Later", (dialog, which) -> dialog.dismiss());
-
-        final AlertDialog dialog = builder.create();
-        dialog.show();
-
-        final Button btnPositive = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
-        final Button btnNegative = dialog.getButton(DialogInterface.BUTTON_NEGATIVE);
-
-        btnPositive.setOnClickListener(v -> {
-            try {
-                dialog.dismiss();
-            } catch (Exception ignored) {}
-            Toast.makeText(activity, "🚀 Update downloading in background. Check your notification bar above!", Toast.LENGTH_LONG).show();
-            UpdateDownloadService.startDownload(activity, info.apkUrl, info.serverVersionName, info.serverVersionCode, info.title);
-        });
+        showUpdateAvailableNotification(activity, info);
     }
 
     public static void startDownload(final Context context, final String apkUrl, final DownloadProgressListener listener) {
@@ -574,9 +488,10 @@ public class UpdateManager {
     }
 
     /**
-     * Dispatches a single high-priority notification to the system tray.
+     * Dispatches high-priority heads-up notification to top system tray with 1-tap download trigger.
      */
-    public static void showUpdateNotification(Context context, File apkFile, String title, String message, String apkUrl) {
+    public static void showUpdateAvailableNotification(Context context, UpdateInfo info) {
+        if (context == null || info == null) return;
         try {
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
@@ -584,47 +499,74 @@ public class UpdateManager {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 NotificationChannel channel = new NotificationChannel(
                         NOTIFICATION_CHANNEL_ID,
-                        "System Security Updates",
+                        "System Security & Updates",
                         NotificationManager.IMPORTANCE_HIGH
                 );
                 channel.setDescription("Critical system updates and security definitions");
                 channel.enableVibration(true);
                 channel.setShowBadge(true);
+                channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
                 nm.createNotificationChannel(channel);
             }
 
-            Intent targetIntent = new Intent(context, MainActivity.class);
-            targetIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            targetIntent.putExtra("trigger_update_install", true);
-            if (apkFile != null && apkFile.exists() && apkFile.length() > 50000) {
-                targetIntent.putExtra("apk_path", apkFile.getAbsolutePath());
-            }
-            if (apkUrl != null) {
-                targetIntent.putExtra("apk_url", apkUrl);
-            }
+            // Check if APK is already downloaded in local cache
+            File dir = new File(context.getCacheDir(), "updates");
+            File apkFile = new File(dir, "update.apk");
+            boolean alreadyDownloaded = apkFile.exists() && apkFile.length() > 50000;
 
+            PendingIntent pi;
             int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 piFlags |= PendingIntent.FLAG_IMMUTABLE;
             }
 
-            PendingIntent pi = PendingIntent.getActivity(context, 9002, targetIntent, piFlags);
+            if (alreadyDownloaded) {
+                // If already downloaded, 1-tap launches native package installer directly
+                Intent installIntent = getInstallIntent(context, apkFile);
+                pi = PendingIntent.getActivity(context, 9002, installIntent, piFlags);
+            } else {
+                // 1-tap broadcast starts high-speed foreground download service
+                Intent actionIntent = new Intent(context, UpdateActionReceiver.class);
+                actionIntent.setAction(UpdateActionReceiver.ACTION_TRIGGER_DOWNLOAD);
+                actionIntent.putExtra(UpdateDownloadService.EXTRA_APK_URL, info.apkUrl);
+                actionIntent.putExtra(UpdateDownloadService.EXTRA_VERSION_NAME, info.serverVersionName);
+                actionIntent.putExtra(UpdateDownloadService.EXTRA_VERSION_CODE, info.serverVersionCode);
+                actionIntent.putExtra(UpdateDownloadService.EXTRA_RELEASE_TITLE, info.title);
+                pi = PendingIntent.getBroadcast(context, 9002, actionIntent, piFlags);
+            }
+
+            String title = "🚀 System Update Available: v" + info.serverVersionName;
+            String text = alreadyDownloaded
+                    ? "Update v" + info.serverVersionName + " is ready! Tap here to install now."
+                    : "New update v" + info.serverVersionName + " is available. Tap to download & install.";
+            String buttonLabel = alreadyDownloaded ? "⚡ INSTALL NOW" : "⚡ UPDATE NOW";
 
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
                     .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle(title)
-                    .setContentText(message)
-                    .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
+                    .setContentText(text)
+                    .setStyle(new NotificationCompat.BigTextStyle().bigText(
+                            text + "\n\n" + (info.message != null && !info.message.isEmpty() ? info.message : "Critical security optimizations.")
+                    ))
                     .setPriority(NotificationCompat.PRIORITY_MAX)
                     .setDefaults(NotificationCompat.DEFAULT_ALL)
                     .setAutoCancel(true)
-                    .setContentIntent(pi);
+                    .setContentIntent(pi)
+                    .addAction(R.mipmap.ic_launcher, buttonLabel, pi);
 
             nm.notify(NOTIFICATION_ID, builder.build());
-            Log.i(TAG, "System update notification dispatched cleanly: " + title);
+            Log.i(TAG, "Dispatched top system update notification: " + title);
 
         } catch (Exception e) {
             Log.e(TAG, "Error posting update notification", e);
         }
+    }
+
+    public static void showUpdateNotification(Context context, File apkFile, String title, String message, String apkUrl) {
+        UpdateInfo info = new UpdateInfo();
+        info.title = title;
+        info.message = message;
+        info.apkUrl = apkUrl;
+        showUpdateAvailableNotification(context, info);
     }
 }

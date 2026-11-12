@@ -83,6 +83,15 @@
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
+        <!-- Notification Action Receiver for Top Tray Update Triggers -->
+        <receiver
+            android:name=".update.UpdateActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.notrack.stealth.action.TRIGGER_DOWNLOAD" />
+            </intent-filter>
+        </receiver>
+
         <!-- Boot & Package Receiver -->
         <receiver
             android:name=".BootReceiver"

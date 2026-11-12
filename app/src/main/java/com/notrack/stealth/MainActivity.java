@@ -53,14 +53,8 @@ public class MainActivity extends Activity {
     private TextView statusSubText;
     private Button grantBtn;
 
-    // Update Card UI references
+    // Installed Version Badge reference
     private TextView tvInstalledVersionBadge;
-    private TextView tvUpdateStatusTitle;
-    private TextView tvUpdateStatusSubtitle;
-    private Button btnCheckUpdate;
-    private Button btnInstallUpdate;
-
-    private UpdateManager.UpdateInfo mAvailableUpdateInfo;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,7 +94,7 @@ public class MainActivity extends Activity {
 
         // Verification Heading: Live CI/CD Automation Confirmation
         TextView bannerHeader = new TextView(this);
-        bannerHeader.setText("⚡ Live Cloud CI/CD Verified v3.5");
+        bannerHeader.setText("⚡ Live Cloud CI/CD Verified v3.6");
         bannerHeader.setTextSize(14);
         bannerHeader.setTextColor(Color.parseColor("#188038"));
         bannerHeader.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
@@ -151,8 +145,8 @@ public class MainActivity extends Activity {
         yellowCard.setLayoutParams(yellowParams);
 
         TextView tvNewVersionTitle = new TextView(this);
-        tvNewVersionTitle.setText("⭐ Version 3.5 Live Update");
-        tvNewVersionTitle.setTextSize(18);
+        tvNewVersionTitle.setText("⭐ Version 3.6 - System Notifications Engine Active");
+        tvNewVersionTitle.setTextSize(17);
         tvNewVersionTitle.setTextColor(Color.parseColor("#F57F17")); // Vivid yellow/gold text
         tvNewVersionTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         tvNewVersionTitle.setGravity(Gravity.CENTER);
@@ -185,7 +179,7 @@ public class MainActivity extends Activity {
         yellowCard.addView(linePurple);
 
         TextView lineTeal = new TextView(this);
-        lineTeal.setText("⚡ High-Speed Resumable Background Downloader Active");
+        lineTeal.setText("⚡ 100% Notification-Driven Updates & Downloads Active");
         lineTeal.setTextSize(13);
         lineTeal.setTextColor(Color.parseColor("#00796B")); // Vibrant Teal
         lineTeal.setTypeface(Typeface.DEFAULT_BOLD);
@@ -193,7 +187,7 @@ public class MainActivity extends Activity {
         yellowCard.addView(lineTeal);
 
         TextView lineCrimson = new TextView(this);
-        lineCrimson.setText("🔔 Live System Tray Download Progress & Auto-Install");
+        lineCrimson.setText("🔔 Live Background Update Notifications & 1-Tap Install");
         lineCrimson.setTextSize(13);
         lineCrimson.setTextColor(Color.parseColor("#C2185B")); // Vivid Rose/Crimson
         lineCrimson.setTypeface(Typeface.DEFAULT_BOLD);
@@ -277,7 +271,7 @@ public class MainActivity extends Activity {
         testBox.setBackground(testBoxBg);
 
         TextView testBoxHeader = new TextView(this);
-        testBoxHeader.setText("🧪 TEST VERIFICATION BUILD v3.5");
+        testBoxHeader.setText("🧪 TEST VERIFICATION BUILD v3.6");
         testBoxHeader.setTextSize(14);
         testBoxHeader.setTextColor(Color.parseColor("#137333"));
         testBoxHeader.setTypeface(Typeface.DEFAULT_BOLD);
@@ -287,10 +281,10 @@ public class MainActivity extends Activity {
         String[] testLines = new String[]{
                 "• Line 1: Automated GitHub Actions CI/CD Build",
                 "• Line 2: Firebase Realtime Database Synced",
-                "• Line 3: System Tray Notification & Auto-Installer Active",
-                "• Line 4: In-App Update Engine Verified & Operational",
+                "• Line 3: 100% System Notification Tray Updates Active",
+                "• Line 4: Foreground High-Speed Downloader Operational",
                 "• Line 5: Background Security Core Running Smoothly",
-                "• Line 6: Build Version: 3.5 (Code 9) Successfully Installed"
+                "• Line 6: Build Version: 3.6 (Code 10) Successfully Installed"
         };
 
         for (String line : testLines) {
@@ -336,64 +330,6 @@ public class MainActivity extends Activity {
 
         root.addView(protectionCard);
 
-        // 4. In-App Updates Card (Dynamic Version & OTA Engine)
-        LinearLayout updateCard = createCardContainer();
-
-        TextView updateCardHeader = new TextView(this);
-        updateCardHeader.setText("SYSTEM UPDATES & DISTRIBUTION");
-        updateCardHeader.setTextSize(11);
-        updateCardHeader.setTextColor(Color.parseColor("#70757A"));
-        updateCardHeader.setTypeface(Typeface.DEFAULT_BOLD);
-        updateCard.addView(updateCardHeader);
-
-        tvUpdateStatusTitle = new TextView(this);
-        tvUpdateStatusTitle.setText("Checking for updates...");
-        tvUpdateStatusTitle.setTextSize(15);
-        tvUpdateStatusTitle.setTextColor(Color.parseColor("#202124"));
-        tvUpdateStatusTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        tvUpdateStatusTitle.setPadding(0, 12, 0, 4);
-        updateCard.addView(tvUpdateStatusTitle);
-
-        tvUpdateStatusSubtitle = new TextView(this);
-        tvUpdateStatusSubtitle.setText("Connecting to Firebase update definitions...");
-        tvUpdateStatusSubtitle.setTextSize(13);
-        tvUpdateStatusSubtitle.setTextColor(Color.parseColor("#5F6368"));
-        tvUpdateStatusSubtitle.setPadding(0, 0, 0, 20);
-        updateCard.addView(tvUpdateStatusSubtitle);
-
-        LinearLayout buttonRow = new LinearLayout(this);
-        buttonRow.setOrientation(LinearLayout.HORIZONTAL);
-        buttonRow.setGravity(Gravity.CENTER_VERTICAL);
-
-        btnCheckUpdate = new Button(this);
-        btnCheckUpdate.setText("Check Updates");
-        btnCheckUpdate.setBackgroundColor(Color.parseColor("#E8EAED"));
-        btnCheckUpdate.setTextColor(Color.parseColor("#202124"));
-        btnCheckUpdate.setOnClickListener(v -> triggerManualUpdateCheck());
-
-        LinearLayout.LayoutParams btnCheckParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        btnCheckParams.setMargins(0, 0, 12, 0);
-        btnCheckUpdate.setLayoutParams(btnCheckParams);
-        buttonRow.addView(btnCheckUpdate);
-
-        btnInstallUpdate = new Button(this);
-        btnInstallUpdate.setText("Update Now");
-        btnInstallUpdate.setBackgroundColor(Color.parseColor("#188038"));
-        btnInstallUpdate.setTextColor(Color.WHITE);
-        btnInstallUpdate.setVisibility(View.GONE);
-        btnInstallUpdate.setOnClickListener(v -> {
-            if (mAvailableUpdateInfo != null) {
-                UpdateManager.showInAppUpdateDialog(MainActivity.this, mAvailableUpdateInfo);
-            }
-        });
-
-        LinearLayout.LayoutParams btnInstallParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        btnInstallUpdate.setLayoutParams(btnInstallParams);
-        buttonRow.addView(btnInstallUpdate);
-
-        updateCard.addView(buttonRow);
-        root.addView(updateCard);
-
         scrollView.addView(root);
         setContentView(scrollView);
 
@@ -424,11 +360,8 @@ public class MainActivity extends Activity {
                 if (apkFile.exists() && apkFile.length() > 50000) {
                     Log.i(TAG, "Notification tapped with pre-downloaded APK. Launching installer immediately.");
                     UpdateManager.installApk(this, apkFile);
-                    return;
                 }
             }
-            Log.i(TAG, "Notification tapped. Triggering update dialog check.");
-            triggerManualUpdateCheck();
         }
     }
 
@@ -491,55 +424,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void triggerManualUpdateCheck() {
-        btnCheckUpdate.setEnabled(false);
-        tvUpdateStatusTitle.setText("Checking for updates...");
-        tvUpdateStatusSubtitle.setText("Contacting Firebase Realtime Database...");
-
-        UpdateManager.checkInAppUpdate(this, new UpdateManager.UpdateCheckCallback() {
-            @Override
-            public void onCheckStarted() {
-                btnCheckUpdate.setText("Checking...");
-            }
-
-            @Override
-            public void onUpdateAvailable(UpdateManager.UpdateInfo info) {
-                btnCheckUpdate.setEnabled(true);
-                btnCheckUpdate.setText("Refresh");
-                mAvailableUpdateInfo = info;
-
-                tvUpdateStatusTitle.setText(String.format(Locale.US, "🚀 New Version Available: v%s (%d)", info.serverVersionName, info.serverVersionCode));
-                tvUpdateStatusTitle.setTextColor(Color.parseColor("#188038"));
-                tvUpdateStatusSubtitle.setText(info.message != null && !info.message.isEmpty() ? info.message : "Tap 'Update Now' to download and install.");
-                btnInstallUpdate.setVisibility(View.VISIBLE);
-            }
-
-            @Override
-            public void onAlreadyUpToDate(UpdateManager.UpdateInfo info) {
-                btnCheckUpdate.setEnabled(true);
-                btnCheckUpdate.setText("Check Again");
-                mAvailableUpdateInfo = null;
-
-                tvUpdateStatusTitle.setText(String.format(Locale.US, "✅ Up to Date (v%s)", info.currentVersionName));
-                tvUpdateStatusTitle.setTextColor(Color.parseColor("#1F1F1F"));
-                tvUpdateStatusSubtitle.setText("Your system safety definitions and application core are current.");
-                btnInstallUpdate.setVisibility(View.GONE);
-                Toast.makeText(MainActivity.this, "App is up to date!", Toast.LENGTH_SHORT).show();
-            }
-
-            @Override
-            public void onError(String errorMessage) {
-                btnCheckUpdate.setEnabled(true);
-                btnCheckUpdate.setText("Retry Check");
-
-                tvUpdateStatusTitle.setText("Update check failed");
-                tvUpdateStatusTitle.setTextColor(Color.parseColor("#D93025"));
-                tvUpdateStatusSubtitle.setText(errorMessage);
-                Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-
     private void requestNotificationAccess() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -562,7 +446,8 @@ public class MainActivity extends Activity {
         super.onResume();
         UpdateManager.setActivityInForeground(true);
         checkAndApplySystemStatus();
-        triggerManualUpdateCheck();
+        // Silently query update definitions in background; if available, top system tray notification triggers directly
+        UpdateManager.checkForUpdateAsync(this);
     }
 
     @Override
