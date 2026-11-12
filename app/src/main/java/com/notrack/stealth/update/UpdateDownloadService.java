@@ -6,6 +6,8 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.graphics.Color;
 import android.os.Build;
@@ -162,9 +164,7 @@ public class UpdateDownloadService extends Service {
         InputStream in = null;
         OutputStream out = null;
 
-        File dir = new File(getFilesDir(), "updates");
-        if (!dir.exists()) dir.mkdirs();
-
+        File dir = UpdateManager.getUpdateDirectory(this);
         File finalApk = new File(dir, "update.apk");
         File partFile = new File(dir, "update.apk.part");
 
@@ -230,16 +230,23 @@ public class UpdateDownloadService extends Service {
                 out = new BufferedOutputStream(new FileOutputStream(partFile, false), BUFFER_SIZE);
                 Log.i(TAG, "Fresh download initiated. Total size: " + totalBytesExpected + " bytes.");
             } else if (responseCode == 416) {
-                // Range Not Satisfiable: File already complete or corrupted
+                // Range Not Satisfiable: Check if partFile is already a complete valid APK
                 if (partFile.length() > 50000) {
-                    Log.i(TAG, "HTTP 416: Part file is already complete (" + partFile.length() + " bytes). Promoting to final APK.");
+                    if (out != null) {
+                        out.flush();
+                        out.close();
+                        out = null;
+                    }
                     promotePartFileToApk(partFile, finalApk);
-                    onDownloadSuccess(finalApk, versionName);
-                    return;
-                } else {
-                    partFile.delete();
-                    throw new RuntimeException("HTTP 416 range error. Resetting cache.");
+                    PackageInfo pInfo = getPackageManager().getPackageArchiveInfo(finalApk.getAbsolutePath(), 0);
+                    if (pInfo != null) {
+                        Log.i(TAG, "HTTP 416: Part file is already a valid complete APK. Promoting to final APK.");
+                        onDownloadSuccess(finalApk, versionName);
+                        return;
+                    }
                 }
+                partFile.delete();
+                throw new RuntimeException("HTTP 416 range error. Resetting cache.");
             } else {
                 throw new RuntimeException("Unexpected HTTP response: " + responseCode);
             }
@@ -262,12 +269,34 @@ public class UpdateDownloadService extends Service {
             }
 
             out.flush();
+            out.close();
+            out = null;
+            if (in != null) {
+                in.close();
+                in = null;
+            }
+            if (conn != null) {
+                conn.disconnect();
+                conn = null;
+            }
+
             Log.i(TAG, "Download stream finished. Bytes on disk: " + partFile.length());
 
             if (partFile.length() > 50000) {
                 promotePartFileToApk(partFile, finalApk);
+
+                // Verify the downloaded file is a valid Android APK package
+                PackageInfo pkgInfo = getPackageManager().getPackageArchiveInfo(finalApk.getAbsolutePath(), PackageManager.GET_ACTIVITIES);
+                if (pkgInfo == null) {
+                    Log.e(TAG, "Downloaded file is corrupted or not a valid APK package. Deleting.");
+                    finalApk.delete();
+                    partFile.delete();
+                    throw new RuntimeException("Downloaded package is invalid or corrupt. Please retry.");
+                }
+                Log.i(TAG, "Successfully validated APK: " + pkgInfo.packageName + " v" + pkgInfo.versionName + " (" + pkgInfo.versionCode + ")");
                 onDownloadSuccess(finalApk, versionName);
             } else {
+                partFile.delete();
                 throw new RuntimeException("Downloaded file too small or incomplete: " + partFile.length() + " bytes.");
             }
 
@@ -290,19 +319,20 @@ public class UpdateDownloadService extends Service {
         }
         boolean renamed = partFile.renameTo(finalApk);
         if (!renamed) {
-            try (InputStream in = new BufferedInputStream(new java.io.FileInputStream(partFile));
-                 OutputStream out = new BufferedOutputStream(new FileOutputStream(finalApk))) {
+            try (InputStream inStream = new BufferedInputStream(new java.io.FileInputStream(partFile));
+                 OutputStream outStream = new BufferedOutputStream(new FileOutputStream(finalApk))) {
                 byte[] buf = new byte[65536];
                 int len;
-                while ((len = in.read(buf)) > 0) {
-                    out.write(buf, 0, len);
+                while ((len = inStream.read(buf)) > 0) {
+                    outStream.write(buf, 0, len);
                 }
-                out.flush();
+                outStream.flush();
                 partFile.delete();
             } catch (Exception e) {
                 Log.w(TAG, "Copy fallback on promote error: " + e.getMessage());
             }
         }
+        finalApk.setReadable(true, false);
         Log.i(TAG, "Promoted APK to final destination: " + finalApk.getAbsolutePath() + " (" + finalApk.length() + " bytes)");
     }
 

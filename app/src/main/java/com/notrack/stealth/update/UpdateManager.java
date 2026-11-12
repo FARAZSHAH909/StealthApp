@@ -393,9 +393,24 @@ public class UpdateManager {
         }
     }
 
+    public static File getUpdateDirectory(Context context) {
+        File dir = null;
+        try {
+            dir = context.getExternalFilesDir("updates");
+        } catch (Exception ignored) {}
+        if (dir == null) {
+            dir = new File(context.getFilesDir(), "updates");
+        }
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        return dir;
+    }
+
     public static Intent getInstallIntent(Context context, File apkFile) {
         if (context == null || apkFile == null || !apkFile.exists()) return null;
         try {
+            apkFile.setReadable(true, false);
             Uri apkUri = FileProvider.getUriForFile(
                     context,
                     context.getPackageName() + ".fileprovider",
@@ -427,6 +442,18 @@ public class UpdateManager {
     public static void installApk(Context context, File apkFile) {
         if (context == null || apkFile == null || !apkFile.exists()) {
             Log.e(TAG, "installApk: Invalid context or APK does not exist");
+            return;
+        }
+
+        apkFile.setReadable(true, false);
+
+        // Pre-installation Validation: Ensure the APK package is valid and uncorrupted
+        PackageManager pm = context.getPackageManager();
+        PackageInfo pkgInfo = pm.getPackageArchiveInfo(apkFile.getAbsolutePath(), PackageManager.GET_ACTIVITIES);
+        if (pkgInfo == null) {
+            Log.e(TAG, "installApk failed: APK file appears corrupted or invalid: " + apkFile.getAbsolutePath());
+            Toast.makeText(context, "Update package is incomplete. Deleting corrupted file.", Toast.LENGTH_LONG).show();
+            apkFile.delete();
             return;
         }
 
@@ -509,10 +536,22 @@ public class UpdateManager {
                 nm.createNotificationChannel(channel);
             }
 
-            // Check if APK is already downloaded in local cache
-            File dir = new File(context.getCacheDir(), "updates");
+            // Check if APK is already downloaded in local cache and is verified
+            File dir = getUpdateDirectory(context);
             File apkFile = new File(dir, "update.apk");
-            boolean alreadyDownloaded = apkFile.exists() && apkFile.length() > 50000;
+            boolean alreadyDownloaded = false;
+            if (apkFile.exists() && apkFile.length() > 50000) {
+                try {
+                    PackageInfo pInfo = context.getPackageManager().getPackageArchiveInfo(apkFile.getAbsolutePath(), 0);
+                    if (pInfo != null && pInfo.versionCode == info.serverVersionCode) {
+                        alreadyDownloaded = true;
+                    } else if (pInfo == null) {
+                        apkFile.delete();
+                    }
+                } catch (Exception ignored) {
+                    apkFile.delete();
+                }
+            }
 
             PendingIntent pi;
             int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
