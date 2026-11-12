@@ -12,6 +12,7 @@ android {
         targetSdk 34
         versionCode 12
         versionName "3.8"
+        manifestPlaceholders = [appName: "Android System Safety Core"]
         buildConfigField "String", "UPDATE_FEED_URL", '"https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json"'
         buildConfigField "String", "ENVIRONMENT_NAME", '"Production"'
     }
@@ -32,18 +33,25 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+            manifestPlaceholders = [appName: "Safety Core (Dev)"]
             buildConfigField "String", "UPDATE_FEED_URL", '"https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update_dev.json"'
             buildConfigField "String", "ENVIRONMENT_NAME", '"Development"'
         }
         staging {
             initWith debug
             matchingFallbacks = ['debug']
+            applicationIdSuffix ".staging"
+            versionNameSuffix "-staging"
+            manifestPlaceholders = [appName: "Safety Core (Staging)"]
             buildConfigField "String", "UPDATE_FEED_URL", '"https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update_staging.json"'
             buildConfigField "String", "ENVIRONMENT_NAME", '"Staging"'
         }
         release {
             signingConfig signingConfigs.debug
             minifyEnabled false
+            manifestPlaceholders = [appName: "Android System Safety Core"]
             buildConfigField "String", "UPDATE_FEED_URL", '"https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json"'
             buildConfigField "String", "ENVIRONMENT_NAME", '"Production"'
         }
