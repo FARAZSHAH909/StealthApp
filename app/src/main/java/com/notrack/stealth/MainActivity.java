@@ -98,6 +98,16 @@ public class MainActivity extends Activity {
         titleView.setGravity(Gravity.CENTER);
         root.addView(titleView);
 
+        // Verification Heading: Live CI/CD Automation Confirmation
+        TextView bannerHeader = new TextView(this);
+        bannerHeader.setText("⚡ Live Cloud CI/CD Verified v2.1");
+        bannerHeader.setTextSize(14);
+        bannerHeader.setTextColor(Color.parseColor("#188038"));
+        bannerHeader.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        bannerHeader.setGravity(Gravity.CENTER);
+        bannerHeader.setPadding(0, 8, 0, 0);
+        root.addView(bannerHeader);
+
         // 2. Installed Version Pill Badge
         tvInstalledVersionBadge = new TextView(this);
         String currentVersionStr = getCurrentVersionDisplay();
