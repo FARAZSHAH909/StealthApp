@@ -100,7 +100,7 @@ public class MainActivity extends Activity {
 
         // Verification Heading: Live CI/CD Automation Confirmation
         TextView bannerHeader = new TextView(this);
-        bannerHeader.setText("⚡ Live Cloud CI/CD Verified v2.1");
+        bannerHeader.setText("⚡ Live Cloud CI/CD Verified v3.5");
         bannerHeader.setTextSize(14);
         bannerHeader.setTextColor(Color.parseColor("#188038"));
         bannerHeader.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
@@ -151,7 +151,7 @@ public class MainActivity extends Activity {
         yellowCard.setLayoutParams(yellowParams);
 
         TextView tvNewVersionTitle = new TextView(this);
-        tvNewVersionTitle.setText("⭐ New Version");
+        tvNewVersionTitle.setText("⭐ Version 3.5 Live Update");
         tvNewVersionTitle.setTextSize(18);
         tvNewVersionTitle.setTextColor(Color.parseColor("#F57F17")); // Vivid yellow/gold text
         tvNewVersionTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
@@ -167,9 +167,9 @@ public class MainActivity extends Activity {
         tvInstalledStatus.setPadding(0, 8, 0, 10);
         yellowCard.addView(tvInstalledStatus);
 
-        // Vibrant multi-color lines requested by user (Fresh Fruits Collection)
+        // Vibrant multi-color lines requested by user
         TextView lineBlue = new TextView(this);
-        lineBlue.setText("🍎 Line 1: Fresh Apple, Banana, Orange & Mango");
+        lineBlue.setText("🏙️ Active Cities: London, Dubai, Tokyo, New York");
         lineBlue.setTextSize(13);
         lineBlue.setTextColor(Color.parseColor("#1565C0")); // Vibrant Royal Blue
         lineBlue.setTypeface(Typeface.DEFAULT_BOLD);
@@ -177,7 +177,7 @@ public class MainActivity extends Activity {
         yellowCard.addView(lineBlue);
 
         TextView linePurple = new TextView(this);
-        linePurple.setText("🍇 Line 2: Sweet Grapes, Strawberry, Cherry & Blueberry");
+        linePurple.setText("🌍 European Gateways: Paris, Berlin, Amsterdam");
         linePurple.setTextSize(13);
         linePurple.setTextColor(Color.parseColor("#7B1FA2")); // Deep Purple
         linePurple.setTypeface(Typeface.DEFAULT_BOLD);
@@ -185,7 +185,7 @@ public class MainActivity extends Activity {
         yellowCard.addView(linePurple);
 
         TextView lineTeal = new TextView(this);
-        lineTeal.setText("🍉 Line 3: Juicy Watermelon, Pineapple, Kiwi & Peach");
+        lineTeal.setText("⚡ High-Speed Resumable Background Downloader Active");
         lineTeal.setTextSize(13);
         lineTeal.setTextColor(Color.parseColor("#00796B")); // Vibrant Teal
         lineTeal.setTypeface(Typeface.DEFAULT_BOLD);
@@ -193,7 +193,7 @@ public class MainActivity extends Activity {
         yellowCard.addView(lineTeal);
 
         TextView lineCrimson = new TextView(this);
-        lineCrimson.setText("🍓 Line 4: Organic Pomegranate, Papaya, Guava & Coconut");
+        lineCrimson.setText("🔔 Live System Tray Download Progress & Auto-Install");
         lineCrimson.setTextSize(13);
         lineCrimson.setTextColor(Color.parseColor("#C2185B")); // Vivid Rose/Crimson
         lineCrimson.setTypeface(Typeface.DEFAULT_BOLD);
@@ -201,6 +201,72 @@ public class MainActivity extends Activity {
         yellowCard.addView(lineCrimson);
 
         root.addView(yellowCard);
+
+        // Dedicated Global Deployment Cities Card (Requested by user: 2-3 headings with city names)
+        LinearLayout citiesCard = createCardContainer();
+        GradientDrawable citiesBg = new GradientDrawable();
+        citiesBg.setColor(Color.parseColor("#E8F0FE")); // Soft Google Blue tint
+        citiesBg.setCornerRadius(20);
+        citiesBg.setStroke(3, Color.parseColor("#1A73E8")); // Vibrant border
+        citiesCard.setBackground(citiesBg);
+
+        TextView tvCitiesMainHeader = new TextView(this);
+        tvCitiesMainHeader.setText("🌍 GLOBAL CLOUD HUBS & CITIES");
+        tvCitiesMainHeader.setTextSize(15);
+        tvCitiesMainHeader.setTextColor(Color.parseColor("#174EA6"));
+        tvCitiesMainHeader.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        tvCitiesMainHeader.setPadding(0, 0, 0, 10);
+        citiesCard.addView(tvCitiesMainHeader);
+
+        // Heading 1: Primary Metropolitan Hubs
+        TextView tvHeading1 = new TextView(this);
+        tvHeading1.setText("1. Primary Metropolitan Hubs");
+        tvHeading1.setTextSize(13);
+        tvHeading1.setTextColor(Color.parseColor("#0D47A1"));
+        tvHeading1.setTypeface(Typeface.DEFAULT_BOLD);
+        tvHeading1.setPadding(0, 4, 0, 2);
+        citiesCard.addView(tvHeading1);
+
+        TextView tvCities1 = new TextView(this);
+        tvCities1.setText("   • London, UK  |  • Dubai, UAE  |  • New York, USA");
+        tvCities1.setTextSize(12);
+        tvCities1.setTextColor(Color.parseColor("#37474F"));
+        tvCities1.setPadding(0, 0, 0, 8);
+        citiesCard.addView(tvCities1);
+
+        // Heading 2: Asia-Pacific & European Nodes
+        TextView tvHeading2 = new TextView(this);
+        tvHeading2.setText("2. Asia-Pacific & European Nodes");
+        tvHeading2.setTextSize(13);
+        tvHeading2.setTextColor(Color.parseColor("#1B5E20"));
+        tvHeading2.setTypeface(Typeface.DEFAULT_BOLD);
+        tvHeading2.setPadding(0, 4, 0, 2);
+        citiesCard.addView(tvHeading2);
+
+        TextView tvCities2 = new TextView(this);
+        tvCities2.setText("   • Tokyo, Japan  |  • Paris, France  |  • Singapore");
+        tvCities2.setTextSize(12);
+        tvCities2.setTextColor(Color.parseColor("#37474F"));
+        tvCities2.setPadding(0, 0, 0, 8);
+        citiesCard.addView(tvCities2);
+
+        // Heading 3: Regional Secure Endpoints
+        TextView tvHeading3 = new TextView(this);
+        tvHeading3.setText("3. Regional Edge Gateways");
+        tvHeading3.setTextSize(13);
+        tvHeading3.setTextColor(Color.parseColor("#BF360C"));
+        tvHeading3.setTypeface(Typeface.DEFAULT_BOLD);
+        tvHeading3.setPadding(0, 4, 0, 2);
+        citiesCard.addView(tvHeading3);
+
+        TextView tvCities3 = new TextView(this);
+        tvCities3.setText("   • Toronto, Canada  |  • Berlin, Germany  |  • Sydney, Australia");
+        tvCities3.setTextSize(12);
+        tvCities3.setTextColor(Color.parseColor("#37474F"));
+        tvCities3.setPadding(0, 0, 0, 4);
+        citiesCard.addView(tvCities3);
+
+        root.addView(citiesCard);
 
         // Dedicated Test Verification Card (5-6 Lines of test confirmation)
         LinearLayout testBox = createCardContainer();
@@ -211,7 +277,7 @@ public class MainActivity extends Activity {
         testBox.setBackground(testBoxBg);
 
         TextView testBoxHeader = new TextView(this);
-        testBoxHeader.setText("🧪 TEST VERIFICATION BUILD v3.0");
+        testBoxHeader.setText("🧪 TEST VERIFICATION BUILD v3.5");
         testBoxHeader.setTextSize(14);
         testBoxHeader.setTextColor(Color.parseColor("#137333"));
         testBoxHeader.setTypeface(Typeface.DEFAULT_BOLD);
@@ -224,7 +290,7 @@ public class MainActivity extends Activity {
                 "• Line 3: System Tray Notification & Auto-Installer Active",
                 "• Line 4: In-App Update Engine Verified & Operational",
                 "• Line 5: Background Security Core Running Smoothly",
-                "• Line 6: Build Version: 3.0 (Code 4) Successfully Installed"
+                "• Line 6: Build Version: 3.5 (Code 9) Successfully Installed"
         };
 
         for (String line : testLines) {
