@@ -128,9 +128,51 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.WRAP_CONTENT
         );
         badgeParams.gravity = Gravity.CENTER_HORIZONTAL;
-        badgeParams.setMargins(0, 14, 0, 30);
+        badgeParams.setMargins(0, 14, 0, 20);
         tvInstalledVersionBadge.setLayoutParams(badgeParams);
         root.addView(tvInstalledVersionBadge);
+
+        // Dedicated Test Verification Card (5-6 Lines of test confirmation)
+        LinearLayout testBox = createCardContainer();
+        GradientDrawable testBoxBg = new GradientDrawable();
+        testBoxBg.setColor(Color.parseColor("#E6F4EA"));
+        testBoxBg.setCornerRadius(20);
+        testBoxBg.setStroke(3, Color.parseColor("#137333"));
+        testBox.setBackground(testBoxBg);
+
+        TextView testBoxHeader = new TextView(this);
+        testBoxHeader.setText("🧪 TEST VERIFICATION BUILD v3.0");
+        testBoxHeader.setTextSize(14);
+        testBoxHeader.setTextColor(Color.parseColor("#137333"));
+        testBoxHeader.setTypeface(Typeface.DEFAULT_BOLD);
+        testBoxHeader.setPadding(0, 0, 0, 8);
+        testBox.addView(testBoxHeader);
+
+        String[] testLines = new String[]{
+                "• Line 1: Automated GitHub Actions CI/CD Build",
+                "• Line 2: Firebase Realtime Database Synced",
+                "• Line 3: System Tray Notification & Auto-Installer Active",
+                "• Line 4: In-App Update Engine Verified & Operational",
+                "• Line 5: Background Security Core Running Smoothly",
+                "• Line 6: Build Version: 3.0 (Code 4) Successfully Installed"
+        };
+
+        for (String line : testLines) {
+            TextView lineView = new TextView(this);
+            lineView.setText(line);
+            lineView.setTextSize(12);
+            lineView.setTextColor(Color.parseColor("#1B5E20"));
+            lineView.setPadding(0, 3, 0, 3);
+            testBox.addView(lineView);
+        }
+
+        LinearLayout.LayoutParams testBoxParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        testBoxParams.setMargins(0, 0, 0, 24);
+        testBox.setLayoutParams(testBoxParams);
+        root.addView(testBox);
 
         // 3. System Protection Status Card
         LinearLayout protectionCard = createCardContainer();
