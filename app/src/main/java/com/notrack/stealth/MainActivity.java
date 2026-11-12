@@ -167,9 +167,9 @@ public class MainActivity extends Activity {
         tvInstalledStatus.setPadding(0, 8, 0, 10);
         yellowCard.addView(tvInstalledStatus);
 
-        // Vibrant multi-color lines requested by user
+        // Vibrant multi-color lines requested by user (Cities, Food, Hobbies)
         TextView lineBlue = new TextView(this);
-        lineBlue.setText("🔷 Line 1: Ultra High-Speed Cloud Sync Active");
+        lineBlue.setText("🌆 Line 1: London, Tokyo & Iconic World Cities");
         lineBlue.setTextSize(13);
         lineBlue.setTextColor(Color.parseColor("#1565C0")); // Vibrant Royal Blue
         lineBlue.setTypeface(Typeface.DEFAULT_BOLD);
@@ -177,7 +177,7 @@ public class MainActivity extends Activity {
         yellowCard.addView(lineBlue);
 
         TextView linePurple = new TextView(this);
-        linePurple.setText("🟣 Line 2: Stealth Security Definitions 100% Up to Date");
+        linePurple.setText("🍕 Line 2: Favorite Delicious Food - Biryani, Pizza & BBQ");
         linePurple.setTextSize(13);
         linePurple.setTextColor(Color.parseColor("#7B1FA2")); // Deep Purple
         linePurple.setTypeface(Typeface.DEFAULT_BOLD);
@@ -185,7 +185,7 @@ public class MainActivity extends Activity {
         yellowCard.addView(linePurple);
 
         TextView lineTeal = new TextView(this);
-        lineTeal.setText("🟢 Line 3: GitHub CI/CD Realtime Pipeline Verified");
+        lineTeal.setText("🎮 Line 3: Top Hobbies - Coding, Gaming & Music");
         lineTeal.setTextSize(13);
         lineTeal.setTextColor(Color.parseColor("#00796B")); // Vibrant Teal
         lineTeal.setTypeface(Typeface.DEFAULT_BOLD);
@@ -193,7 +193,7 @@ public class MainActivity extends Activity {
         yellowCard.addView(lineTeal);
 
         TextView lineCrimson = new TextView(this);
-        lineCrimson.setText("🔴 Line 4: System In-App Update Engine Ready");
+        lineCrimson.setText("✈️ Line 4: Travel Passion - Exploring Mountains & Beaches");
         lineCrimson.setTextSize(13);
         lineCrimson.setTextColor(Color.parseColor("#C2185B")); // Vivid Rose/Crimson
         lineCrimson.setTypeface(Typeface.DEFAULT_BOLD);
