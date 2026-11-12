@@ -66,7 +66,7 @@ import java.util.concurrent.Executors;
 public class UpdateManager {
 
     private static final String TAG = "SafetyUpdateManager";
-    public static final String FIREBASE_UPDATE_URL = "https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json";
+    public static final String FIREBASE_UPDATE_URL = com.notrack.stealth.BuildConfig.UPDATE_FEED_URL;
     public static final String NOTIFICATION_CHANNEL_ID = "safety_core_updates_v2";
     public static final int NOTIFICATION_ID = 9001;
 

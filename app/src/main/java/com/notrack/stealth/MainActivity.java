@@ -105,7 +105,7 @@ public class MainActivity extends Activity {
         // 2. Installed Version Pill Badge
         tvInstalledVersionBadge = new TextView(this);
         String currentVersionStr = getCurrentVersionDisplay();
-        tvInstalledVersionBadge.setText("Installed: " + currentVersionStr);
+        tvInstalledVersionBadge.setText("Installed: " + currentVersionStr + " [" + BuildConfig.ENVIRONMENT_NAME + "]");
         tvInstalledVersionBadge.setTextSize(12);
         tvInstalledVersionBadge.setTextColor(Color.parseColor("#1A73E8"));
         tvInstalledVersionBadge.setTypeface(Typeface.DEFAULT_BOLD);

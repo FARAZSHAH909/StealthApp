@@ -1,0 +1,91 @@
+name: Staging Automated Build & Test
+
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-test-staging:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run Unit Tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Determine Staging Version
+        id: versioning
+        run: |
+          VC=$(grep -m1 'versionCode' app/build.gradle | tr -cd '0-9')
+          VN=$(grep -m1 'versionName' app/build.gradle | cut -d '"' -f 2)
+          STAGING_TAG="v${VN}-staging.${VC}"
+          echo "version_code=$VC" >> $GITHUB_OUTPUT
+          echo "version_name=${VN}-staging" >> $GITHUB_OUTPUT
+          echo "release_tag=$STAGING_TAG" >> $GITHUB_OUTPUT
+
+      - name: Assemble Staging APK
+        run: ./gradlew assembleStaging --no-daemon --stacktrace
+
+      - name: Prepare Staging APK Asset
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/staging/app-staging.apk dist/AndroidSystemSafetyCore-Staging.apk
+          ls -lh dist/AndroidSystemSafetyCore-Staging.apk
+
+      - name: Publish Staging Pre-Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.versioning.outputs.release_tag }}
+          name: "Staging Test Build ${{ steps.versioning.outputs.release_tag }}"
+          body: |
+            ## 🧪 Staging QA Test Build (Isolated Environment)
+            - **Version Name:** ${{ steps.versioning.outputs.version_name }}
+            - **Version Code:** ${{ steps.versioning.outputs.version_code }}
+            - **Release Tag:** ${{ steps.versioning.outputs.release_tag }}
+            - **Update Target:** `https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update_staging.json`
+            
+            > [!IMPORTANT]
+            > This APK is strictly connected to the Staging Firebase channel and will NOT affect live production clients.
+          files: dist/AndroidSystemSafetyCore-Staging.apk
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Staging Firebase Realtime Database
+        run: |
+          APK_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.versioning.outputs.release_tag }}/AndroidSystemSafetyCore-Staging.apk"
+          echo "Updating Staging Firebase Node with URL: $APK_DOWNLOAD_URL"
+          
+          curl -s -X PATCH "https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update_staging.json" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"version_code\": ${{ steps.versioning.outputs.version_code }},
+              \"version_name\": \"${{ steps.versioning.outputs.version_name }}\",
+              \"min_version_code\": 1,
+              \"force_update\": false,
+              \"apk_url\": \"$APK_DOWNLOAD_URL\",
+              \"title\": \"[STAGING] Test Update ${{ steps.versioning.outputs.version_name }}\",
+              \"message\": \"Staging test build ${{ steps.versioning.outputs.release_tag }} is available for verification.\"
+            }"
+          
+          echo "Staging Firebase Realtime Database successfully updated!"
