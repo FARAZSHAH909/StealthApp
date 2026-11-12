@@ -537,46 +537,49 @@ public class UpdateManager {
                     grantIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     context.startActivity(grantIntent);
                     Toast.makeText(context, "Please enable 'Allow from this source' to update Android System Safety Core", Toast.LENGTH_LONG).show();
+                    return;
                 } catch (Exception e) {
                     Log.w(TAG, "Cannot launch MANAGE_UNKNOWN_APP_SOURCES: " + e.getMessage());
                 }
             }
         }
 
-        // Attempt 1: Session-Based Installer (PackageInstaller.Session)
-        boolean sessionCommitted = false;
+        // Attempt 1: Standard Android FileProvider Package Installer Intent (Presents system install prompt directly)
+        boolean launchedFileProvider = false;
         try {
-            sessionCommitted = SessionInstallerHelper.installApkViaSession(context, apkFile);
+            Uri apkUri = FileProvider.getUriForFile(
+                    context,
+                    context.getPackageName() + ".fileprovider",
+                    apkFile
+            );
+
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            intent.setClipData(ClipData.newRawUri("update", apkUri));
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+            List<ResolveInfo> resInfoList = context.getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            for (ResolveInfo resolveInfo : resInfoList) {
+                String pkg = resolveInfo.activityInfo.packageName;
+                context.grantUriPermission(pkg, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+
+            context.startActivity(intent);
+            launchedFileProvider = true;
+            Log.i(TAG, "Launched standard Android Package Installer via FileProvider successfully.");
+
         } catch (Exception e) {
-            Log.w(TAG, "Session installer attempt exception: " + e.getMessage());
+            Log.e(TAG, "FileProvider package installation failed, falling back to SessionInstaller: " + e.getMessage());
         }
 
-        // Attempt 2: Standard Android FileProvider Package Installer Intent
-        if (!sessionCommitted) {
+        // Attempt 2: Session-Based Installer (PackageInstaller.Session fallback)
+        if (!launchedFileProvider) {
             try {
-                Uri apkUri = FileProvider.getUriForFile(
-                        context,
-                        context.getPackageName() + ".fileprovider",
-                        apkFile
-                );
-
-                Intent intent = new Intent(Intent.ACTION_VIEW);
-                intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
-                intent.setClipData(ClipData.newRawUri("update", apkUri));
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
-                List<ResolveInfo> resInfoList = context.getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
-                for (ResolveInfo resolveInfo : resInfoList) {
-                    String pkg = resolveInfo.activityInfo.packageName;
-                    context.grantUriPermission(pkg, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                }
-
-                context.startActivity(intent);
-                Log.i(TAG, "Launched FileProvider install intent successfully.");
-
+                SessionInstallerHelper.installApkViaSession(context, apkFile);
             } catch (Exception e) {
-                Log.e(TAG, "FileProvider package installation failed", e);
+                Log.w(TAG, "Session installer attempt exception: " + e.getMessage());
                 Toast.makeText(context, "Failed to launch installer: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         }
