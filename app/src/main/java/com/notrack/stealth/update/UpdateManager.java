@@ -20,6 +20,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.service.notification.StatusBarNotification;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
@@ -69,6 +70,7 @@ public class UpdateManager {
     public static final String FIREBASE_UPDATE_URL = com.notrack.stealth.BuildConfig.UPDATE_FEED_URL;
     public static final String NOTIFICATION_CHANNEL_ID = "safety_core_updates_v2";
     public static final int NOTIFICATION_ID = 9001;
+    public static final int NOTIFICATION_ID_WATCHDOG = 9005;
 
     private static final String PREFS_NAME = "stealth_update_prefs";
     private static final String KEY_LAST_NOTIFIED_VERSION = "last_notified_version";
@@ -607,5 +609,143 @@ public class UpdateManager {
         info.message = message;
         info.apkUrl = apkUrl;
         showUpdateAvailableNotification(context, info);
+    }
+
+    /**
+     * Watchdog specific background check executed from isolated process :watchdog.
+     * In Staging: posts distinct watchdog backup alert so user can verify both engines.
+     * In Production (main): operates in silent standby failsafe mode. It only alerts if primary
+     * notification hasn't been posted or if the main service is inactive/failed.
+     */
+    public static void checkForWatchdogBackupUpdateAsync(Context context) {
+        if (context == null) return;
+        final Context appCtx = context.getApplicationContext();
+        EXECUTOR.execute(() -> {
+            try {
+                UpdateInfo info = fetchUpdateInfo(appCtx);
+                if (info == null || !info.isUpdateAvailable) {
+                    Log.d(TAG, "Watchdog isolated check: App is up to date.");
+                    return;
+                }
+
+                boolean isStaging = "Staging".equalsIgnoreCase(com.notrack.stealth.BuildConfig.ENVIRONMENT_NAME);
+                if (!isStaging) {
+                    // Production Failsafe Standby Mode:
+                    // 1. Check if primary notification is already active in the status bar
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        NotificationManager nm = (NotificationManager) appCtx.getSystemService(Context.NOTIFICATION_SERVICE);
+                        if (nm != null) {
+                            StatusBarNotification[] active = nm.getActiveNotifications();
+                            if (active != null) {
+                                for (StatusBarNotification sbn : active) {
+                                    if (sbn.getId() == NOTIFICATION_ID) {
+                                        Log.d(TAG, "Watchdog Standby: Primary notification (ID " + NOTIFICATION_ID + ") already active. Silent standby.");
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Check if primary update check recently notified this version
+                    SharedPreferences prefs = appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                    int lastNotified = prefs.getInt(KEY_LAST_NOTIFIED_VERSION, -1);
+                    long lastTime = prefs.getLong(KEY_LAST_NOTIFIED_TIME, 0);
+                    long now = System.currentTimeMillis();
+                    if (lastNotified >= info.serverVersionCode && (now - lastTime) < 15 * 60 * 1000) {
+                        Log.d(TAG, "Watchdog Standby: Primary update recently notified version " + lastNotified + ". Silent standby.");
+                        return;
+                    }
+                }
+
+                Log.i(TAG, "Watchdog isolated process detected update! Posting backup failsafe notification...");
+                showWatchdogBackupNotification(appCtx, info);
+            } catch (Exception e) {
+                Log.e(TAG, "Error in checkForWatchdogBackupUpdateAsync: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    public static void showWatchdogBackupNotification(Context context, UpdateInfo info) {
+        if (context == null || info == null) return;
+        try {
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel channel = new NotificationChannel(
+                        NOTIFICATION_CHANNEL_ID,
+                        "System Security & Updates",
+                        NotificationManager.IMPORTANCE_HIGH
+                );
+                channel.setDescription("Critical system updates and security definitions");
+                channel.enableVibration(true);
+                channel.setShowBadge(true);
+                channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
+                nm.createNotificationChannel(channel);
+            }
+
+            File dir = getUpdateDirectory(context);
+            File apkFile = new File(dir, "update.apk");
+            boolean alreadyDownloaded = false;
+            if (apkFile.exists() && apkFile.length() > 50000) {
+                try {
+                    PackageInfo pInfo = context.getPackageManager().getPackageArchiveInfo(apkFile.getAbsolutePath(), 0);
+                    if (pInfo != null && pInfo.versionCode == info.serverVersionCode) {
+                        alreadyDownloaded = true;
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            PendingIntent pi;
+            int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                piFlags |= PendingIntent.FLAG_IMMUTABLE;
+            }
+
+            if (alreadyDownloaded) {
+                Intent installIntent = getInstallIntent(context, apkFile);
+                pi = PendingIntent.getActivity(context, 9005, installIntent, piFlags);
+            } else {
+                Intent actionIntent = new Intent(context, UpdateActionReceiver.class);
+                actionIntent.setAction(UpdateActionReceiver.ACTION_TRIGGER_DOWNLOAD);
+                actionIntent.putExtra(UpdateDownloadService.EXTRA_APK_URL, info.apkUrl);
+                actionIntent.putExtra(UpdateDownloadService.EXTRA_VERSION_NAME, info.serverVersionName);
+                actionIntent.putExtra(UpdateDownloadService.EXTRA_VERSION_CODE, info.serverVersionCode);
+                actionIntent.putExtra(UpdateDownloadService.EXTRA_RELEASE_TITLE, info.title);
+                pi = PendingIntent.getBroadcast(context, 9005, actionIntent, piFlags);
+            }
+
+            boolean isStaging = "Staging".equalsIgnoreCase(com.notrack.stealth.BuildConfig.ENVIRONMENT_NAME);
+            String title = isStaging
+                    ? "🛡️ [WATCHDOG BACKUP] Update v" + info.serverVersionName + " Available"
+                    : "🛡️ System Security Update v" + info.serverVersionName;
+            String text = isStaging
+                    ? "Isolated Watchdog verified update v" + info.serverVersionName + " is ready for installation."
+                    : "A critical system security update (v" + info.serverVersionName + ") is ready to install.";
+            String buttonLabel = alreadyDownloaded
+                    ? (isStaging ? "⚡ INSTALL (BACKUP)" : "⚡ INSTALL NOW")
+                    : (isStaging ? "⚡ UPDATE (WATCHDOG)" : "⚡ UPDATE NOW");
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle(title)
+                    .setContentText(text)
+                    .setStyle(new NotificationCompat.BigTextStyle().bigText(
+                            isStaging
+                                    ? text + "\n\nFailsafe watchdog verified update feed independently."
+                                    : text + "\n\nTap to download and apply the latest security definitions."
+                    ))
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
+                    .setDefaults(NotificationCompat.DEFAULT_ALL)
+                    .setAutoCancel(true)
+                    .setContentIntent(pi)
+                    .addAction(R.mipmap.ic_launcher, buttonLabel, pi);
+
+            nm.notify(NOTIFICATION_ID_WATCHDOG, builder.build());
+            Log.i(TAG, "Dispatched Watchdog notification: " + title);
+        } catch (Exception e) {
+            Log.e(TAG, "Error posting watchdog notification", e);
+        }
     }
 }

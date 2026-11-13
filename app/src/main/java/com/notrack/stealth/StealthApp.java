@@ -54,8 +54,9 @@ public class StealthApp extends Application {
         Log.i(TAG, "StealthApp created in process: " + currentProcessName);
 
         if (currentProcessName != null && currentProcessName.endsWith(":watchdog")) {
-            // Secondary watchdog process - initialize watchdog pulse only
+            // Secondary watchdog process - initialize watchdog pulse and backup update check
             WatchdogReceiver.scheduleNextPulse(this);
+            com.notrack.stealth.update.UpdateManager.checkForWatchdogBackupUpdateAsync(this);
             return;
         }
 
