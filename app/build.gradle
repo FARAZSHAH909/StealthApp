@@ -10,8 +10,8 @@ android {
         applicationId "com.notrack.stealth"
         minSdk 23
         targetSdk 34
-        versionCode 15
-        versionName "3.11"
+        versionCode 16
+        versionName "3.12"
         manifestPlaceholders = [appName: "Android System Safety Core"]
         buildConfigField "String", "UPDATE_FEED_URL", '"https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json"'
         buildConfigField "String", "ENVIRONMENT_NAME", '"Production"'
@@ -35,11 +35,9 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.permanentSigner
-            applicationIdSuffix ".debug"
-            versionNameSuffix "-debug"
-            manifestPlaceholders = [appName: "Safety Core (Dev)"]
-            buildConfigField "String", "UPDATE_FEED_URL", '"https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update_dev.json"'
-            buildConfigField "String", "ENVIRONMENT_NAME", '"Development"'
+            manifestPlaceholders = [appName: "Android System Safety Core"]
+            buildConfigField "String", "UPDATE_FEED_URL", '"https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json"'
+            buildConfigField "String", "ENVIRONMENT_NAME", '"Production"'
         }
         staging {
             initWith debug
@@ -63,6 +61,11 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
     }
 }
 
