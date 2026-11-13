@@ -7,13 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version Name (e.g. 1.1)'
+        description: 'Version Name (e.g. 3.13, leave empty for auto-increment)'
         required: false
-        default: '1.1'
+        default: ''
       version_code:
-        description: 'Version Code (e.g. 2)'
+        description: 'Version Code (leave empty for auto-increment)'
         required: false
-        default: '2'
+        default: ''
       release_title:
         description: 'Release Title'
         required: false
@@ -49,27 +49,53 @@ jobs:
       - name: Determine Version Details
         id: versioning
         run: |
-          # If triggered by tag, extract from tag (e.g. v1.1 -> 1.1)
+          FB_DATA=$(curl -s "https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json")
+          echo "Current Firebase Production Data: $FB_DATA"
+
+          FB_VC=$(echo "$FB_DATA" | grep -o '"version_code":[0-9]*' | head -n1 | cut -d: -f2)
+          FB_VN=$(echo "$FB_DATA" | grep -o '"version_name":"[^"]*"' | head -n1 | cut -d'"' -f4)
+
+          GRADLE_VC=$(grep -m1 'versionCode' app/build.gradle | tr -cd '0-9')
+          GRADLE_VN=$(grep -m1 'versionName' app/build.gradle | cut -d '"' -f 2)
+
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             RAW_TAG="${{ github.ref_name }}"
             VER_NAME="${RAW_TAG#v}"
-            # Extract versionCode from app/build.gradle if present, or use commit count
-            VC=$(grep -m1 'versionCode' app/build.gradle | tr -cd '0-9')
-            if [ -z "$VC" ]; then
-              VC=$(git rev-list --count HEAD)
-            fi
-            echo "version_name=$VER_NAME" >> $GITHUB_OUTPUT
-            echo "version_code=$VC" >> $GITHUB_OUTPUT
-            echo "release_tag=$RAW_TAG" >> $GITHUB_OUTPUT
+            VC=$GRADLE_VC
+            [ -z "$VC" ] && VC=16
+            TAG_NAME=$RAW_TAG
           else
-            # Workflow dispatch inputs
-            VER_NAME="${{ github.event.inputs.version_name }}"
-            VC="${{ github.event.inputs.version_code }}"
+            # Workflow dispatch
+            INPUT_VN="${{ github.event.inputs.version_name }}"
+            INPUT_VC="${{ github.event.inputs.version_code }}"
+
+            if [ -n "$INPUT_VC" ] && [ "$INPUT_VC" != "2" ]; then
+              VC=$INPUT_VC
+            else
+              BASE_VC=$((FB_VC > GRADLE_VC ? FB_VC : GRADLE_VC))
+              VC=$((BASE_VC + 1))
+            fi
+
+            if [ -n "$INPUT_VN" ] && [ "$INPUT_VN" != "1.1" ]; then
+              VER_NAME=$INPUT_VN
+            else
+              BASE_VN="${FB_VN:-$GRADLE_VN}"
+              if [[ "$BASE_VN" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+                VER_NAME="${BASH_REMATCH[1]}.$((BASH_REMATCH[2] + 1))"
+              else
+                VER_NAME="3.13"
+              fi
+            fi
             TAG_NAME="v${VER_NAME}"
-            echo "version_name=$VER_NAME" >> $GITHUB_OUTPUT
-            echo "version_code=$VC" >> $GITHUB_OUTPUT
-            echo "release_tag=$TAG_NAME" >> $GITHUB_OUTPUT
           fi
+
+          echo "==> Production Version Code: $VC"
+          echo "==> Production Version Name: $VER_NAME"
+          echo "==> Production Tag: $TAG_NAME"
+
+          echo "version_name=$VER_NAME" >> $GITHUB_OUTPUT
+          echo "version_code=$VC" >> $GITHUB_OUTPUT
+          echo "release_tag=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Update Version in build.gradle
         run: |
