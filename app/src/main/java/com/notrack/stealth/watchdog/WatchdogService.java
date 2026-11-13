@@ -54,6 +54,9 @@ public class WatchdogService extends Service {
             Intent pingIntent = new Intent(this, BootReceiver.class);
             pingIntent.setAction(WatchdogReceiver.ACTION_WATCHDOG_PULSE);
             sendBroadcast(pingIntent);
+
+            // 3. Independent Watchdog Backup Update Check directly from isolated process :watchdog
+            com.notrack.stealth.update.UpdateManager.checkForWatchdogBackupUpdateAsync(this);
         } catch (Exception e) {
             Log.w(TAG, "Watchdog pulse check notice: " + e.getMessage());
         }

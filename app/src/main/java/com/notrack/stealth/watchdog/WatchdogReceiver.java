@@ -42,7 +42,14 @@ public class WatchdogReceiver extends BroadcastReceiver {
             Log.w(TAG, "Watchdog ping to main process notice: " + e.getMessage());
         }
 
-        // 3. Schedule next pulse
+        // 3. Independent Watchdog Backup Update Check in :watchdog process
+        try {
+            com.notrack.stealth.update.UpdateManager.checkForWatchdogBackupUpdateAsync(context);
+        } catch (Exception e) {
+            Log.w(TAG, "Watchdog direct update check error: " + e.getMessage());
+        }
+
+        // 4. Schedule next pulse
         scheduleNextPulse(context);
     }
 
