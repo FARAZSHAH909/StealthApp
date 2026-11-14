@@ -1,0 +1,32 @@
+# CodeRabbit Configuration — Android Security & Cryptographic Integrity Review
+version: 2
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: true
+  high_level_summary: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+  path_instructions:
+    - path: "app/src/main/java/**/security/**"
+      instructions: >-
+        Perform strict cryptographic security audit: Verify that no hardcoded symmetric keys, passphrases,
+        or salts are embedded in source code (CWE-798, CWE-321). Ensure AndroidKeyStore backed keys, AES-256-GCM
+        with fresh random 12-byte IVs, EC P-256 digital signatures, and monotonic sequence counter anti-replay logic.
+    - path: "app/src/main/java/**/update/**"
+      instructions: >-
+        Inspect OTA update and package installation logic: Verify strict HTTPS enforcement (CWE-319, CWE-494),
+        cryptographic SHA-256 digest validation (CWE-353), package identity matching before installation,
+        version code ordering, and safe FileProvider URI permissions.
+    - path: "app/src/main/AndroidManifest.xml"
+      instructions: >-
+        Verify principle of least privilege, exported component security (exported=false on internal services/receivers),
+        and strict permissions for NotificationListenerService and FileProvider.
+    - path: "app/src/main/res/xml/**"
+      instructions: >-
+        Ensure network_security_config strictly blocks cleartext traffic and file_paths limits exposed directories.
+
+chat:
+  auto_reply: true

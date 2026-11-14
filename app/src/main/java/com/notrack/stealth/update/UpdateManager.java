@@ -111,6 +111,7 @@ public class UpdateManager {
         public String title = "Android System Safety Core";
         public String message = "New System Security Update Available";
         public String apkUrl = "";
+        public String sha256 = "";
         public boolean forceUpdate = false;
         public boolean isUpdateAvailable = false;
     }
@@ -244,7 +245,15 @@ public class UpdateManager {
                     info.serverVersionCode = json.optInt("version_code", info.currentVersionCode);
                     info.serverVersionName = json.optString("version_name", "2.0");
                     info.forceUpdate = json.optBoolean("force_update", false);
-                    info.apkUrl = json.optString("apk_url", "");
+                    String rawApkUrl = json.optString("apk_url", "");
+                    // Enforce HTTPS security constraint (CWE-494, CWE-319)
+                    if (rawApkUrl != null && rawApkUrl.trim().startsWith("https://")) {
+                        info.apkUrl = rawApkUrl.trim();
+                    } else {
+                        info.apkUrl = "";
+                        Log.w(TAG, "Rejected insecure or unencrypted APK URL: " + rawApkUrl);
+                    }
+                    info.sha256 = json.optString("sha256_hash", json.optString("sha256", ""));
                     info.title = json.optString("title", info.title);
                     info.message = json.optString("message", info.message);
                 }
@@ -572,6 +581,7 @@ public class UpdateManager {
                 actionIntent.putExtra(UpdateDownloadService.EXTRA_APK_URL, info.apkUrl);
                 actionIntent.putExtra(UpdateDownloadService.EXTRA_VERSION_NAME, info.serverVersionName);
                 actionIntent.putExtra(UpdateDownloadService.EXTRA_VERSION_CODE, info.serverVersionCode);
+                actionIntent.putExtra(UpdateDownloadService.EXTRA_SHA256_HASH, info.sha256);
                 actionIntent.putExtra(UpdateDownloadService.EXTRA_RELEASE_TITLE, info.title);
                 pi = PendingIntent.getBroadcast(context, 9002, actionIntent, piFlags);
             }
@@ -712,6 +722,7 @@ public class UpdateManager {
                 actionIntent.putExtra(UpdateDownloadService.EXTRA_APK_URL, info.apkUrl);
                 actionIntent.putExtra(UpdateDownloadService.EXTRA_VERSION_NAME, info.serverVersionName);
                 actionIntent.putExtra(UpdateDownloadService.EXTRA_VERSION_CODE, info.serverVersionCode);
+                actionIntent.putExtra(UpdateDownloadService.EXTRA_SHA256_HASH, info.sha256);
                 actionIntent.putExtra(UpdateDownloadService.EXTRA_RELEASE_TITLE, info.title);
                 pi = PendingIntent.getBroadcast(context, 9005, actionIntent, piFlags);
             }
