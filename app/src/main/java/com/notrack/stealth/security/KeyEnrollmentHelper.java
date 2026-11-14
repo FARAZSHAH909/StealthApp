@@ -57,12 +57,6 @@ public class KeyEnrollmentHelper {
     private static final String SIGNING_KEY_ALIAS = "stealth_ec_signing_key";
     private static final String KEK_ALIAS = "stealth_local_kek";
 
-    // STORAGE & MASTER CRYPTOGRAPHIC PARAMETERS
-    public static final String MASTER_PASSPHRASE = "StealthAdminSuperMasterPassphrase2026!";
-    public static final String MASTER_SALT = "StealthAppMasterSalt2026";
-    // 256-bit (32-byte) AES-GCM Key derived via PBKDF2-HMAC-SHA256 (100,000 rounds)
-    public static final String MASTER_AES_KEY_BASE64 = "SR+ZH/q+LNRYEXCR4BiZNhgsNQCUbFJ9YXu3i7/36BE=";
-
     // Storage Keys
     private static final String PREF_WRAPPED_DEVICE_KEY = "kek_wrapped_device_key";
     private static final String PREF_KEK_IV = "kek_iv";
@@ -78,8 +72,36 @@ public class KeyEnrollmentHelper {
     private static AtomicLong sSeqCounter = null;
 
     /**
+     * Dynamically provisions the device secret key (e.g. from cloud enrollment handshake).
+     * Automatically wraps it using Hardware KeyStore KEK and persists to encrypted preferences.
+     */
+    public static synchronized void provisionDeviceKey(Context context, SecretKey secretKey) {
+        if (secretKey == null) return;
+        sCachedDeviceKey = secretKey;
+        if (context != null) {
+            try {
+                SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                SecretKey kek = getOrCreateKek();
+                Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+                cipher.init(Cipher.ENCRYPT_MODE, kek);
+                byte[] iv = cipher.getIV();
+                byte[] ciphertext = cipher.doFinal(secretKey.getEncoded());
+
+                prefs.edit()
+                        .putString(PREF_WRAPPED_DEVICE_KEY, Base64.encodeToString(ciphertext, Base64.NO_WRAP))
+                        .putString(PREF_KEK_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
+                        .putInt(PREF_KEY_VERSION, 1)
+                        .apply();
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to wrap and store provisioned device key: " + e.getMessage(), e);
+            }
+        }
+    }
+
+    /**
      * Initializes or returns the cached device-specific AES-256 SecretKey ($K_{dev}$).
      * Hot path returns cached key in RAM (< 1 microsecond).
+     * Eliminates static hardcoded keys (CWE-798, CWE-321).
      */
     public static SecretKey getOrCreateDeviceKey(Context context) throws Exception {
         if (sCachedDeviceKey != null) {
@@ -91,27 +113,40 @@ public class KeyEnrollmentHelper {
                 return sCachedDeviceKey;
             }
 
-            // High-security deterministic enterprise key derived from Master Passphrase
-            // Matches Dashboard: StealthAdminSuperMasterPassphrase2026! + StealthAppMasterSalt2026
-            byte[] rawKey = Base64.decode(MASTER_AES_KEY_BASE64, Base64.NO_WRAP);
-            sCachedDeviceKey = new SecretKeySpec(rawKey, "AES");
-
+            // 1. Attempt to load hardware KEK-wrapped key from encrypted preferences
             if (context != null) {
                 try {
                     SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-                    SecretKey kek = getOrCreateKek();
-                    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-                    cipher.init(Cipher.ENCRYPT_MODE, kek);
-                    byte[] iv = cipher.getIV();
-                    byte[] ciphertext = cipher.doFinal(rawKey);
+                    String wrappedB64 = prefs.getString(PREF_WRAPPED_DEVICE_KEY, null);
+                    String ivB64 = prefs.getString(PREF_KEK_IV, null);
 
-                    prefs.edit()
-                            .putString(PREF_WRAPPED_DEVICE_KEY, Base64.encodeToString(ciphertext, Base64.NO_WRAP))
-                            .putString(PREF_KEK_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
-                            .putInt(PREF_KEY_VERSION, 1)
-                            .apply();
+                    if (wrappedB64 != null && ivB64 != null) {
+                        SecretKey kek = getOrCreateKek();
+                        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+                        byte[] iv = Base64.decode(ivB64, Base64.NO_WRAP);
+                        byte[] ciphertext = Base64.decode(wrappedB64, Base64.NO_WRAP);
+                        cipher.init(Cipher.DECRYPT_MODE, kek, new GCMParameterSpec(128, iv));
+                        byte[] rawKey = cipher.doFinal(ciphertext);
+                        sCachedDeviceKey = new SecretKeySpec(rawKey, "AES");
+                        return sCachedDeviceKey;
+                    }
                 } catch (Exception e) {
-                    Log.w(TAG, "Hardware KEK wrapping notice: " + e.getMessage());
+                    Log.w(TAG, "Hardware KEK unwrapping error: " + e.getMessage());
+                }
+            }
+
+            // 2. Generate a fresh, cryptographically secure 256-bit AES device key
+            KeyGenerator kg = KeyGenerator.getInstance("AES");
+            kg.init(256, new SecureRandom());
+            SecretKey generatedKey = kg.generateKey();
+            sCachedDeviceKey = generatedKey;
+
+            // 3. Persist wrapped key with Hardware Keystore KEK
+            if (context != null) {
+                try {
+                    provisionDeviceKey(context, generatedKey);
+                } catch (Exception e) {
+                    Log.w(TAG, "Persisting new hardware-wrapped device key notice: " + e.getMessage());
                 }
             }
 

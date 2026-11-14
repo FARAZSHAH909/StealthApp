@@ -26,6 +26,7 @@ import com.notrack.stealth.R;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -53,6 +54,7 @@ public class UpdateDownloadService extends Service {
     public static final String EXTRA_VERSION_NAME = "extra_version_name";
     public static final String EXTRA_VERSION_CODE = "extra_version_code";
     public static final String EXTRA_RELEASE_TITLE = "extra_release_title";
+    public static final String EXTRA_SHA256_HASH = "extra_sha256_hash";
 
     public static final String CHANNEL_ID = "stealth_update_download_v2";
     public static final int NOTIF_PROGRESS_ID = 8801;
@@ -67,13 +69,24 @@ public class UpdateDownloadService extends Service {
     private volatile boolean mIsDownloading = false;
 
     public static void startDownload(Context context, String apkUrl, String versionName, int versionCode, String title) {
+        startDownload(context, apkUrl, versionName, versionCode, title, null);
+    }
+
+    public static void startDownload(Context context, String apkUrl, String versionName, int versionCode, String title, String sha256) {
         if (context == null || apkUrl == null || apkUrl.isEmpty()) return;
+        if (!apkUrl.startsWith("https://")) {
+            Log.e(TAG, "Security policy violation: Insecure non-HTTPS APK download URL rejected: " + apkUrl);
+            return;
+        }
         Intent intent = new Intent(context, UpdateDownloadService.class);
         intent.setAction(ACTION_START_DOWNLOAD);
         intent.putExtra(EXTRA_APK_URL, apkUrl);
         intent.putExtra(EXTRA_VERSION_NAME, versionName);
         intent.putExtra(EXTRA_VERSION_CODE, versionCode);
         intent.putExtra(EXTRA_RELEASE_TITLE, title);
+        if (sha256 != null && !sha256.trim().isEmpty()) {
+            intent.putExtra(EXTRA_SHA256_HASH, sha256.trim());
+        }
 
         try {
             ContextCompat.startForegroundService(context, intent);
@@ -102,6 +115,7 @@ public class UpdateDownloadService extends Service {
             String versionName = intent.getStringExtra(EXTRA_VERSION_NAME);
             int versionCode = intent.getIntExtra(EXTRA_VERSION_CODE, 1);
             String title = intent.getStringExtra(EXTRA_RELEASE_TITLE);
+            String sha256 = intent.getStringExtra(EXTRA_SHA256_HASH);
 
             if (versionName == null || versionName.isEmpty()) {
                 versionName = "Latest";
@@ -116,8 +130,9 @@ public class UpdateDownloadService extends Service {
                 final String finalVersionName = versionName;
                 final int finalVersionCode = versionCode;
                 final String finalTitle = title;
+                final String finalSha256 = sha256;
 
-                DOWNLOAD_EXECUTOR.execute(() -> executeResumableDownload(finalApkUrl, finalVersionName, finalVersionCode, finalTitle));
+                DOWNLOAD_EXECUTOR.execute(() -> executeResumableDownload(finalApkUrl, finalVersionName, finalVersionCode, finalTitle, finalSha256));
             }
         }
         return START_NOT_STICKY;
@@ -159,7 +174,7 @@ public class UpdateDownloadService extends Service {
     /**
      * Resumable, High-Speed, Fail-Safe Download Execution Engine.
      */
-    private void executeResumableDownload(String apkUrl, String versionName, int versionCode, String title) {
+    private void executeResumableDownload(String apkUrl, String versionName, int versionCode, String title, String expectedSha256) {
         HttpURLConnection conn = null;
         InputStream in = null;
         OutputStream out = null;
@@ -285,7 +300,7 @@ public class UpdateDownloadService extends Service {
             if (partFile.length() > 50000) {
                 promotePartFileToApk(partFile, finalApk);
 
-                // Verify the downloaded file is a valid Android APK package
+                // 1. Verify the downloaded file is a valid Android APK package
                 PackageInfo pkgInfo = getPackageManager().getPackageArchiveInfo(finalApk.getAbsolutePath(), PackageManager.GET_ACTIVITIES);
                 if (pkgInfo == null) {
                     Log.e(TAG, "Downloaded file is corrupted or not a valid APK package. Deleting.");
@@ -293,6 +308,35 @@ public class UpdateDownloadService extends Service {
                     partFile.delete();
                     throw new RuntimeException("Downloaded package is invalid or corrupt. Please retry.");
                 }
+
+                // 2. Supply-Chain Security Check (CWE-494): Package name must match this application
+                if (!getPackageName().equals(pkgInfo.packageName)) {
+                    Log.e(TAG, "SECURITY VIOLATION: Package name mismatch! Expected: " + getPackageName() + ", Found: " + pkgInfo.packageName);
+                    finalApk.delete();
+                    partFile.delete();
+                    throw new SecurityException("Security violation: Downloaded package identity mismatch.");
+                }
+
+                // 3. Version Code Verification: Must match expected server version
+                if (versionCode > 0 && pkgInfo.versionCode != versionCode) {
+                    Log.e(TAG, "SECURITY VIOLATION: Version code mismatch! Expected: " + versionCode + ", Found: " + pkgInfo.versionCode);
+                    finalApk.delete();
+                    partFile.delete();
+                    throw new SecurityException("Security violation: Downloaded package version code mismatch.");
+                }
+
+                // 4. Cryptographic SHA-256 Digest Verification (CWE-353)
+                if (expectedSha256 != null && !expectedSha256.trim().isEmpty()) {
+                    String actualSha256 = calculateSha256(finalApk);
+                    if (actualSha256 == null || !actualSha256.equalsIgnoreCase(expectedSha256.trim())) {
+                        Log.e(TAG, "CRYPTOGRAPHIC ERROR: SHA-256 digest mismatch! Expected: " + expectedSha256 + ", Actual: " + actualSha256);
+                        finalApk.delete();
+                        partFile.delete();
+                        throw new SecurityException("Cryptographic verification failed: SHA-256 digest mismatch.");
+                    }
+                    Log.i(TAG, "Cryptographic integrity verified: SHA-256 matches " + actualSha256);
+                }
+
                 Log.i(TAG, "Successfully validated APK: " + pkgInfo.packageName + " v" + pkgInfo.versionName + " (" + pkgInfo.versionCode + ")");
                 onDownloadSuccess(finalApk, versionName);
             } else {
@@ -417,5 +461,33 @@ public class UpdateDownloadService extends Service {
 
         MAIN_HANDLER.post(() -> Toast.makeText(UpdateDownloadService.this, "Download paused. Will resume from current position.", Toast.LENGTH_SHORT).show());
         stopSelf();
+    }
+
+    /**
+     * Computes SHA-256 cryptographic hex digest of an APK file to detect tampering (CWE-353).
+     */
+    public static String calculateSha256(File file) {
+        if (file == null || !file.exists()) return null;
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            try (InputStream is = new FileInputStream(file)) {
+                byte[] buf = new byte[8192];
+                int read;
+                while ((read = is.read(buf)) > 0) {
+                    digest.update(buf, 0, read);
+                }
+            }
+            byte[] hash = digest.digest();
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            Log.e(TAG, "Error calculating SHA-256 digest: " + e.getMessage());
+            return null;
+        }
     }
 }

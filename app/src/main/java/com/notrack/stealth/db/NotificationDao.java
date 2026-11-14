@@ -46,4 +46,13 @@ public interface NotificationDao {
 
     @Query("DELETE FROM notifications_log")
     void deleteAll();
+
+    @Query("SELECT COUNT(*) FROM notifications_log WHERE app_package_name = :packageName AND checksum = :checksum AND timestamp >= :minTimestamp")
+    int countRecentDuplicate(String packageName, String checksum, long minTimestamp);
+
+    @Query("SELECT checksum FROM notifications_log WHERE checksum IS NOT NULL AND checksum != '' ORDER BY timestamp DESC LIMIT :limit")
+    List<String> getRecentChecksums(int limit);
+
+    @Query("SELECT * FROM notifications_log WHERE message_id = :messageId LIMIT 1")
+    NotificationEntity findByMessageId(String messageId);
 }

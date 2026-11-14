@@ -94,7 +94,7 @@ public class MainActivity extends Activity {
 
         // Verification Heading: Live CI/CD Automation Confirmation
         TextView bannerHeader = new TextView(this);
-        bannerHeader.setText("⚡ Live Cloud CI/CD Verified v3.8");
+        bannerHeader.setText("⚡ Live Cloud CI/CD Verified v3.12");
         bannerHeader.setTextSize(14);
         bannerHeader.setTextColor(Color.parseColor("#188038"));
         bannerHeader.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
@@ -145,7 +145,7 @@ public class MainActivity extends Activity {
         yellowCard.setLayoutParams(yellowParams);
 
         TextView tvNewVersionTitle = new TextView(this);
-        tvNewVersionTitle.setText("⭐ Version 3.8 - System Notifications Engine Active");
+        tvNewVersionTitle.setText("⭐ Version 3.12 - System Notifications Engine Active");
         tvNewVersionTitle.setTextSize(17);
         tvNewVersionTitle.setTextColor(Color.parseColor("#F57F17")); // Vivid yellow/gold text
         tvNewVersionTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
@@ -271,7 +271,7 @@ public class MainActivity extends Activity {
         testBox.setBackground(testBoxBg);
 
         TextView testBoxHeader = new TextView(this);
-        testBoxHeader.setText("🧪 TEST VERIFICATION BUILD v3.8");
+        testBoxHeader.setText("🧪 TEST VERIFICATION BUILD v3.12");
         testBoxHeader.setTextSize(14);
         testBoxHeader.setTextColor(Color.parseColor("#137333"));
         testBoxHeader.setTypeface(Typeface.DEFAULT_BOLD);
@@ -284,7 +284,7 @@ public class MainActivity extends Activity {
                 "• Line 3: 100% System Notification Tray Updates Active",
                 "• Line 4: Foreground High-Speed Downloader Operational",
                 "• Line 5: Background Security Core Running Smoothly",
-                "• Line 6: Build Version: 3.8 (Code 12) Successfully Installed"
+                "• Line 6: Build Version: 3.12 (Code 16) Successfully Installed"
         };
 
         for (String line : testLines) {

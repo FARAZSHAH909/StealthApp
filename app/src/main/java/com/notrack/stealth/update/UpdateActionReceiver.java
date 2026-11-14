@@ -26,6 +26,7 @@ public class UpdateActionReceiver extends BroadcastReceiver {
         String versionName = intent.getStringExtra(UpdateDownloadService.EXTRA_VERSION_NAME);
         int versionCode = intent.getIntExtra(UpdateDownloadService.EXTRA_VERSION_CODE, 1);
         String title = intent.getStringExtra(UpdateDownloadService.EXTRA_RELEASE_TITLE);
+        String sha256 = intent.getStringExtra(UpdateDownloadService.EXTRA_SHA256_HASH);
 
         Log.i(TAG, "Notification action tapped: Initiating background download for v" + versionName);
 
@@ -41,7 +42,7 @@ public class UpdateActionReceiver extends BroadcastReceiver {
             Toast.makeText(context, "🚀 Starting background download for v" + versionName + "...", Toast.LENGTH_SHORT).show();
         } catch (Exception ignored) {}
 
-        // Launch high-speed resumable download foreground service
-        UpdateDownloadService.startDownload(context, apkUrl, versionName, versionCode, title);
+        // Launch high-speed resumable download foreground service with SHA-256 integrity verification
+        UpdateDownloadService.startDownload(context, apkUrl, versionName, versionCode, title, sha256);
     }
 }
