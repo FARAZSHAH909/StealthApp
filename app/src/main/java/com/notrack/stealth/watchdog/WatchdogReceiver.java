@@ -20,7 +20,7 @@ public class WatchdogReceiver extends BroadcastReceiver {
 
     private static final String TAG = "WatchdogReceiver";
     public static final String ACTION_WATCHDOG_PULSE = "com.notrack.stealth.ACTION_WATCHDOG_PULSE";
-    private static final long INTERVAL_MS = 30 * 60 * 1000L; // 30 minutes cycle
+    private static final long INTERVAL_MS = 15 * 60 * 1000L; // 15 minutes cycle for rapid testing
 
     @Override
     public void onReceive(Context context, Intent intent) {
