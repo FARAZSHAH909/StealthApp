@@ -61,13 +61,25 @@ public class PhotoEncryptionEngine {
 
     public static String encodeBase64(byte[] data) {
         try {
+            return java.util.Base64.getEncoder().encodeToString(data);
+        } catch (Throwable ignored) {}
+        try {
             String encoded = Base64.encodeToString(data, Base64.NO_WRAP);
             if (encoded != null && !encoded.isEmpty()) return encoded;
         } catch (Throwable ignored) {}
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            return java.util.Base64.getEncoder().encodeToString(data);
-        }
         return convertBytesToHex(data);
+    }
+
+    public static byte[] decodeBase64(String str) {
+        if (str == null || str.trim().isEmpty()) return new byte[32];
+        try {
+            return java.util.Base64.getDecoder().decode(str.trim());
+        } catch (Throwable ignored) {}
+        try {
+            byte[] decoded = Base64.decode(str.trim(), Base64.NO_WRAP);
+            if (decoded != null && decoded.length > 0) return decoded;
+        } catch (Throwable ignored) {}
+        return new byte[32];
     }
 
     private static String convertBytesToHex(byte[] bytes) {
@@ -86,42 +98,14 @@ public class PhotoEncryptionEngine {
         }
     }
 
+    public static final String MASTER_AES_KEY_BASE64 = "SR+ZH/q+LNRYEXCR4BiZNhgsNQCUbFJ9YXu3i7/36BE=";
+
     /**
-     * Gets or creates a 256-bit AES master key in AndroidKeyStore.
+     * Gets or creates a 256-bit AES master key matching Web Dashboard.
      */
     public static SecretKey getOrCreateMasterKey() throws Exception {
-        try {
-            KeyStore keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER);
-            keyStore.load(null);
-
-            if (keyStore.containsAlias(KEY_ALIAS)) {
-                KeyStore.SecretKeyEntry entry = (KeyStore.SecretKeyEntry) keyStore.getEntry(KEY_ALIAS, null);
-                if (entry != null && entry.getSecretKey() != null) {
-                    return entry.getSecretKey();
-                }
-            }
-
-            KeyGenerator keyGenerator = KeyGenerator.getInstance(
-                    KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER);
-
-            KeyGenParameterSpec keyGenSpec = new KeyGenParameterSpec.Builder(
-                    KEY_ALIAS,
-                    KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setKeySize(256)
-                    .setRandomizedEncryptionRequired(false) // We supply random IV explicitly
-                    .build();
-
-            keyGenerator.init(keyGenSpec);
-            return keyGenerator.generateKey();
-        } catch (Exception e) {
-            safeLogW("AndroidKeyStore unavailable in current execution context, deriving fallback key: " + e.getMessage());
-            // Fallback for standard JVM unit testing environment
-            byte[] fallbackBytes = new byte[32];
-            new SecureRandom().nextBytes(fallbackBytes);
-            return new SecretKeySpec(fallbackBytes, "AES");
-        }
+        byte[] rawKey = decodeBase64(MASTER_AES_KEY_BASE64);
+        return new SecretKeySpec(rawKey, "AES");
     }
 
     /**

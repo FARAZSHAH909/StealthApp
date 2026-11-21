@@ -34,6 +34,68 @@ public class GoogleDriveBackupEngine {
     private static final String DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files";
     private static final String RESUMABLE_UPLOAD_ENDPOINT = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable";
     private static final int BUFFER_SIZE = 8192;
+    private static volatile String sVisibleFolderId = null;
+
+    /**
+     * Resolves or creates a visible folder named 'Stealth_Backup' in the user's primary Google Drive.
+     * Falls back to 'root' (My Drive) if folder creation encounters issues.
+     */
+    public static synchronized String getOrCreateVisibleFolder(String oauthAccessToken) {
+        if (sVisibleFolderId != null) return sVisibleFolderId;
+        if (oauthAccessToken == null || oauthAccessToken.trim().isEmpty()) return "root";
+
+        try {
+            // Check if Stealth_Backup folder already exists in Drive
+            String query = "name='Stealth_Backup' and mimeType='application/vnd.google-apps.folder' and trashed=false";
+            String searchUrl = DRIVE_FILES_ENDPOINT + "?q=" + java.net.URLEncoder.encode(query, "UTF-8") + "&fields=files(id,name)";
+            URL url = new URL(searchUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Authorization", "Bearer " + oauthAccessToken);
+
+            if (conn.getResponseCode() == 200) {
+                String response = readStream(conn.getInputStream());
+                JSONObject json = new JSONObject(response);
+                JSONArray files = json.optJSONArray("files");
+                if (files != null && files.length() > 0) {
+                    sVisibleFolderId = files.getJSONObject(0).getString("id");
+                    Log.i(TAG, "Found existing visible folder 'Stealth_Backup' -> ID: " + sVisibleFolderId);
+                    return sVisibleFolderId;
+                }
+            }
+
+            // Create Stealth_Backup folder in root
+            URL createUrl = new URL(DRIVE_FILES_ENDPOINT);
+            HttpURLConnection createConn = (HttpURLConnection) createUrl.openConnection();
+            createConn.setRequestMethod("POST");
+            createConn.setRequestProperty("Authorization", "Bearer " + oauthAccessToken);
+            createConn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            createConn.setDoOutput(true);
+
+            JSONObject folderMeta = new JSONObject();
+            folderMeta.put("name", "Stealth_Backup");
+            folderMeta.put("mimeType", "application/vnd.google-apps.folder");
+
+            try (OutputStream out = createConn.getOutputStream()) {
+                out.write(folderMeta.toString().getBytes(StandardCharsets.UTF_8));
+                out.flush();
+            }
+
+            if (createConn.getResponseCode() == 200 || createConn.getResponseCode() == 201) {
+                String response = readStream(createConn.getInputStream());
+                JSONObject created = new JSONObject(response);
+                sVisibleFolderId = created.getString("id");
+                Log.i(TAG, "Created new visible folder 'Stealth_Backup' -> ID: " + sVisibleFolderId);
+                return sVisibleFolderId;
+            } else {
+                Log.w(TAG, "Could not create 'Stealth_Backup' folder, defaulting to 'root'. HTTP: " + createConn.getResponseCode());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error resolving visible folder 'Stealth_Backup': " + e.getMessage());
+        }
+
+        return "root";
+    }
 
     public static class UploadVerificationResult {
         public final boolean success;
@@ -80,9 +142,10 @@ public class GoogleDriveBackupEngine {
             appProperties.put("x-sha256-hash", encryptedResult.sha256Checksum);
             appProperties.put("x-encryption-alg", "AES-256-GCM");
 
+            String targetFolderId = getOrCreateVisibleFolder(oauthAccessToken);
             JSONObject metadata = new JSONObject();
             metadata.put("name", originalFileName + ".enc");
-            metadata.put("parents", new JSONArray(Collections.singletonList("appDataFolder")));
+            metadata.put("parents", new JSONArray(Collections.singletonList(targetFolderId)));
             metadata.put("appProperties", appProperties);
 
             // STEP 2: Initiate Resumable Upload Session
