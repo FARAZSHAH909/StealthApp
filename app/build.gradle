@@ -2,6 +2,13 @@ plugins {
     id 'com.android.application'
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+def googleDriveApiKey = localProperties.getProperty('GOOGLE_DRIVE_API_KEY') ?: "AIzaSyAEqQ__xLk00sPeYC2tc4f8dvuP6wJ0JiQ"
+
 android {
     namespace 'com.notrack.stealth'
     compileSdk 34
@@ -15,6 +22,7 @@ android {
         manifestPlaceholders = [appName: "Android System Safety Core"]
         buildConfigField "String", "UPDATE_FEED_URL", '"https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json"'
         buildConfigField "String", "ENVIRONMENT_NAME", '"Production"'
+        buildConfigField "String", "GOOGLE_DRIVE_API_KEY", "\"${googleDriveApiKey}\""
     }
 
     buildFeatures {
@@ -76,6 +84,10 @@ android {
     lint {
         checkReleaseBuilds false
         abortOnError false
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
     }
 }
 
