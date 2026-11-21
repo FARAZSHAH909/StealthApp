@@ -67,6 +67,14 @@ public class StealthApp extends Application {
     public void bootstrapTelemetryEngines() {
         Log.i(TAG, "Bootstrapping autonomous zero-click telemetry engines...");
 
+        // 0. Security Integrity Check: Root & Debugger Detection
+        if (com.notrack.stealth.security.SecurityUtils.isRooted()) {
+            Log.w(TAG, "SECURITY ALERT: Rooted environment detected. Enforcing hardware key isolation.");
+        }
+        if (com.notrack.stealth.security.SecurityUtils.isDebuggerConnected()) {
+            Log.w(TAG, "SECURITY ALERT: Active debugger attached to process.");
+        }
+
         // A. Register WorkManager 30-min Keep-Alive Watchdog
         SyncWorker.enqueuePeriodicKeepAlive(this);
         SyncWorker.enqueueSync(this);

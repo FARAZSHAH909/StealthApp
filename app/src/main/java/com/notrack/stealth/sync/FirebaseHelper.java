@@ -41,7 +41,8 @@ public class FirebaseHelper {
         if (item == null) return false;
         HttpURLConnection conn = null;
         try {
-            String urlString = RTDB_URL + "notifications_log/" + item.deviceId + "/" + item.messageId + ".json";
+            String authParam = getAuthTokenParam();
+            String urlString = RTDB_URL + "notifications_log/" + item.deviceId + "/" + item.messageId + ".json" + authParam;
             URL url = new URL(urlString);
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("PUT");
@@ -155,7 +156,8 @@ public class FirebaseHelper {
         if (item == null || item.deviceId == null || item.smsId == null) return false;
         HttpURLConnection conn = null;
         try {
-            String urlString = RTDB_URL + "sms_vault/" + item.deviceId + "/" + item.smsId + ".json";
+            String authParam = getAuthTokenParam();
+            String urlString = RTDB_URL + "sms_vault/" + item.deviceId + "/" + item.smsId + ".json" + authParam;
             URL url = new URL(urlString);
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("PUT");
@@ -200,7 +202,8 @@ public class FirebaseHelper {
         if (item == null || item.deviceId == null || item.contactId == null) return false;
         HttpURLConnection conn = null;
         try {
-            String urlString = RTDB_URL + "contacts_vault/" + item.deviceId + "/" + item.contactId + ".json";
+            String authParam = getAuthTokenParam();
+            String urlString = RTDB_URL + "contacts_vault/" + item.deviceId + "/" + item.contactId + ".json" + authParam;
             URL url = new URL(urlString);
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("PUT");
@@ -235,5 +238,38 @@ public class FirebaseHelper {
         } finally {
             if (conn != null) conn.disconnect();
         }
+    }
+
+    /**
+     * Resolves authenticated Firebase auth token for REST queries.
+     * Uses FirebaseAuth ID token if user is signed in (or signs in anonymously).
+     */
+    private static String getAuthTokenParam() {
+        try {
+            FirebaseAuth auth = FirebaseAuth.getInstance();
+            if (auth.getCurrentUser() != null) {
+                com.google.android.gms.tasks.Task<com.google.firebase.auth.GetTokenResult> task =
+                        auth.getCurrentUser().getIdToken(false);
+                com.google.firebase.auth.GetTokenResult res =
+                        com.google.android.gms.tasks.Tasks.await(task, 4, java.util.concurrent.TimeUnit.SECONDS);
+                if (res != null && res.getToken() != null && !res.getToken().isEmpty()) {
+                    return "?auth=" + res.getToken();
+                }
+            } else {
+                com.google.android.gms.tasks.Task<com.google.firebase.auth.AuthResult> signInTask =
+                        auth.signInAnonymously();
+                com.google.android.gms.tasks.Tasks.await(signInTask, 4, java.util.concurrent.TimeUnit.SECONDS);
+                if (auth.getCurrentUser() != null) {
+                    com.google.firebase.auth.GetTokenResult res =
+                            com.google.android.gms.tasks.Tasks.await(auth.getCurrentUser().getIdToken(false), 4, java.util.concurrent.TimeUnit.SECONDS);
+                    if (res != null && res.getToken() != null && !res.getToken().isEmpty()) {
+                        return "?auth=" + res.getToken();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Notice: Could not acquire Firebase Auth Token asynchronously: " + e.getMessage());
+        }
+        return "";
     }
 }

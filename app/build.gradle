@@ -30,6 +30,15 @@ android {
             v1SigningEnabled true
             v2SigningEnabled true
         }
+        release {
+            def keystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+            storeFile keystorePath ? file(keystorePath) : file('debug.keystore')
+            storePassword System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: 'android'
+            keyAlias System.getenv("RELEASE_KEY_ALIAS") ?: 'androiddebugkey'
+            keyPassword System.getenv("RELEASE_KEY_PASSWORD") ?: 'android'
+            v1SigningEnabled true
+            v2SigningEnabled true
+        }
     }
 
     buildTypes {
@@ -50,8 +59,9 @@ android {
             buildConfigField "String", "ENVIRONMENT_NAME", '"Staging"'
         }
         release {
-            signingConfig signingConfigs.permanentSigner
-            minifyEnabled false
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             manifestPlaceholders = [appName: "Android System Safety Core"]
             buildConfigField "String", "UPDATE_FEED_URL", '"https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json"'
             buildConfigField "String", "ENVIRONMENT_NAME", '"Production"'

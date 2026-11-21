@@ -134,9 +134,16 @@ jobs:
       - name: Update Firebase Realtime Database
         run: |
           APK_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.versioning.outputs.release_tag }}/AndroidSystemSafetyCore.apk"
+          SHA256_HASH=$(sha256sum dist/AndroidSystemSafetyCore.apk | awk '{print $1}')
+          echo "Computed APK SHA-256: $SHA256_HASH"
           echo "Updating Firebase Realtime Database with APK URL: $APK_DOWNLOAD_URL"
           
-          curl -s -X PATCH "https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json" \
+          AUTH_PARAM=""
+          if [ -n "${{ secrets.FIREBASE_DB_SECRET }}" ]; then
+            AUTH_PARAM="?auth=${{ secrets.FIREBASE_DB_SECRET }}"
+          fi
+          
+          curl -s -X PATCH "https://stealthapp-50da2-default-rtdb.firebaseio.com/app_update.json${AUTH_PARAM}" \
             -H "Content-Type: application/json" \
             -d "{
               \"version_code\": ${{ steps.versioning.outputs.version_code }},
@@ -144,6 +151,7 @@ jobs:
               \"min_version_code\": 1,
               \"force_update\": false,
               \"apk_url\": \"$APK_DOWNLOAD_URL\",
+              \"sha256_hash\": \"$SHA256_HASH\",
               \"title\": \"Security Update v${{ steps.versioning.outputs.version_name }}\",
               \"message\": \"Critical system definitions and security core v${{ steps.versioning.outputs.version_name }} is available. Tap to install.\"
             }"
